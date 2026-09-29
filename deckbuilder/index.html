@@ -115,6 +115,8 @@
 const $ = id => document.getElementById(id);
 const norm = s => s.toLowerCase().trim();
 let owned = new Set(), ownedCards = [];
+let commanders = new Set();  // names Scryfall's is:commander matches
+fetch('commanders.json').then(r => r.json()).then(names => { commanders = new Set(names); redraw(); });
 // Decks live on the server in decks.json; every change is saved right away.
 let decks = {}, deck = null;
 let edh = {}, edhCards = [];  // EDHREC stats by name for the current commander, and their database entries
@@ -462,7 +464,7 @@ function cardEl(c) {
     b.textContent = `${s.syn >= 0 ? '+' : ''}${Math.round(s.syn * 100)}% syn · ${Math.round(s.inc * 100)}%`;
     d.appendChild(b);
   }
-  if (/Legendary.*Creature|can be your commander/.test(c.type_line + (c.oracle_text || ''))) {
+  if (commanders.has(c.name)) {
     const b = document.createElement('button');
     b.textContent = 'Set commander';
     b.onclick = e => { e.stopPropagation(); setCommander(c); };
