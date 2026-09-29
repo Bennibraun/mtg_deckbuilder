@@ -31,10 +31,11 @@
   #status { color: var(--accent); font-size: 12px; }
   h3 { margin: 16px 0 8px; font-size: 15px; font-weight: 600; }
   h4 { margin: 12px 0 4px; font-size: 13px; color: var(--dim); }
-  .results { display: grid; grid-template-columns: repeat(auto-fill, minmax(146px, 1fr)); gap: 10px; }
-  .card { cursor: pointer; position: relative; transition: transform .1s; }
-  .card:hover { transform: translateY(-3px); }
-  .card img { width: 100%; border-radius: 7px; display: block; }
+  .results { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  .card { cursor: pointer; position: relative; transition: transform .15s; }
+  .card:hover { transform: scale(1.5); z-index: 5; }
+  .card:hover img { box-shadow: 0 12px 40px rgba(0,0,0,.7); }
+  .card img { width: 100%; aspect-ratio: 488 / 680; border-radius: 10px; display: block; }
   .card.owned::after { content: "owned"; position: absolute; top: 6px; right: 6px; background: var(--own); color: #000; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; }
   .card button { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); font-size: 11px; padding: 3px 8px; opacity: 0; }
   .card:hover button { opacity: 1; }
@@ -55,7 +56,7 @@
   li .x { border: none; background: none; color: var(--dim); padding: 0 4px; visibility: hidden; }
   li:hover .x { visibility: visible; }
   li .x:hover { color: #f55; }
-  #preview { position: fixed; width: 244px; border-radius: 12px; pointer-events: none; display: none; box-shadow: 0 8px 30px rgba(0,0,0,.6); z-index: 10; }
+  #preview { position: fixed; width: 336px; border-radius: 12px; pointer-events: none; display: none; box-shadow: 0 8px 30px rgba(0,0,0,.6); z-index: 10; }
   .deckopts { display: flex; gap: 6px; align-items: center; color: var(--dim); font-size: 12px; }
   .deckopts select { padding: 3px 6px; font-size: 12px; }
   #side .buttons { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
@@ -140,6 +141,7 @@ const LABELS = { Sorcery: 'Sorceries', Other: 'Other' };
 const typeOf = t => TYPES.find(x => (t || '').includes(x)) || 'Other';
 const small = c => c.image_uris?.small || c.card_faces?.[0]?.image_uris?.small;
 const big = url => url?.replace('/small/', '/normal/');
+const large = url => url?.replace('/small/', '/large/');
 const colorsOf = c => c.colors || c.card_faces?.[0]?.colors || [];
 const remember = c => { deck.info[c.name] = { img: small(c), type: c.type_line, cmc: c.cmc ?? 0, colors: colorsOf(c) }; };
 const COLORS = { W: 'White', U: 'Blue', B: 'Black', R: 'Red', G: 'Green' };
@@ -161,9 +163,9 @@ function preview(el, img) {
   el.onmouseenter = () => {
     if (!img) return;
     const r = el.getBoundingClientRect();
-    p.src = big(img);
-    p.style.top = Math.max(8, Math.min(r.top - 40, innerHeight - 350)) + 'px';
-    p.style.left = (r.left - 256) + 'px';
+    p.src = large(img);
+    p.style.top = Math.max(8, Math.min(r.top - 60, innerHeight - 480)) + 'px';
+    p.style.left = (r.left - 348) + 'px';
     p.style.display = 'block';
   };
   el.onmouseleave = () => { p.style.display = 'none'; };
@@ -375,7 +377,14 @@ const searchSoon = () => { clearTimeout(timer); timer = setTimeout(search, 400);
 function cardEl(c) {
   const d = document.createElement('div');
   d.className = 'card' + (isOwned(c.name) ? ' owned' : '');
-  d.innerHTML = `<img src="${small(c)}" loading="lazy">`;
+  d.innerHTML = `<img src="${big(small(c))}" loading="lazy">`;
+  // grow toward the inside of the results pane so edge cards are not clipped
+  d.onmouseenter = () => {
+    const r = d.getBoundingClientRect(), m = $('main').getBoundingClientRect();
+    const x = r.left - m.left < r.width ? 'left' : m.right - r.right < r.width ? 'right' : 'center';
+    const y = r.top - m.top < r.height / 2 ? 'top' : m.bottom - r.bottom < r.height / 2 ? 'bottom' : 'center';
+    d.style.transformOrigin = `${x} ${y}`;
+  };
   d.querySelector('img').title = `${c.name} (click to add)`;
   d.onclick = () => addCard(c);
   const s = edhStat(c);
