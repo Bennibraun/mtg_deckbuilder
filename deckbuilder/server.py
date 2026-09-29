@@ -42,7 +42,41 @@ def hidden(c):
     return c["set_type"] in ("memorabilia", "token", "alchemy") or "playtest" in c.get("promo_types", [])
 
 
-def slim(c, commanders):
+# Deck strategies shown in the sidebar: label -> Scryfall Tagger tag (child tags included).
+STRATEGIES = {
+    "Ramp": "ramp", "Card draw": "draw", "Removal": "removal", "Board wipe": "sweeper",
+    "Counterspell": "counterspell", "Tutor": "tutor", "Recursion": "recursion", "Protection": "protection",
+    "Lifegain": "lifegain", "Lifegain payoff": "lifegain-matters", "Tokens": "repeatable-token-generator",
+    "Sacrifice outlet": "sacrifice-outlet", "Burn": "burn", "Mill": "mill", "Discard": "discard",
+    "Flicker": "flicker", "Anthem": "anthem", "Copy": "copy", "Landfall": "landfall", "Extra turn": "extra-turn",
+}
+
+
+def strategy_tags():
+    """oracle_id -> strategy labels, from Scryfall's Oracle Tags bulk file."""
+    meta = json.load(get("https://api.scryfall.com/bulk-data/oracle-tags"))
+    with get(meta["jsonl_download_uri"]) as r, gzip.open(r, "rt", encoding="utf-8") as lines:
+        tags = {t["id"]: t for t in map(json.loads, lines)}
+    by_slug = {t["slug"]: t for t in tags.values()}
+
+    def oracle_ids(t, seen):
+        if t["id"] in seen:
+            return set()
+        seen.add(t["id"])
+        ids = {x["oracle_id"] for x in t["taggings"]}
+        for child in t["child_ids"]:
+            if child in tags:
+                ids |= oracle_ids(tags[child], seen)
+        return ids
+
+    out = {}
+    for label, slug in STRATEGIES.items():
+        for oid in oracle_ids(by_slug[slug], set()):
+            out.setdefault(oid, []).append(label)
+    return out
+
+
+def slim(c, commanders, tags):
     faces = c.get("card_faces") or [c]
     f = lambda k: c.get(k) or faces[0].get(k)
     stat = lambda k: [x[k] for x in [c, *faces] if x.get(k) is not None]
@@ -56,6 +90,7 @@ def slim(c, commanders):
         "power": stat("power"), "toughness": stat("toughness"), "loyalty": stat("loyalty"),
         "commander": c["name"] in commanders,
         "hidden": hidden(c),
+        "tags": tags.get(c.get("oracle_id") or faces[0].get("oracle_id"), []),
         "legalities": c["legalities"],
         "edhrec_rank": c.get("edhrec_rank"),
         "image_uris": {"small": (f("image_uris") or {}).get("small")},
@@ -65,9 +100,10 @@ def slim(c, commanders):
 def download_db():
     print("downloading Scryfall oracle bulk data...", flush=True)
     commanders = search_names("is:commander")
+    tags = strategy_tags()
     meta = json.load(get("https://api.scryfall.com/bulk-data/oracle-cards"))
     with get(meta["jsonl_download_uri"]) as r, gzip.open(r, "rt", encoding="utf-8") as lines:
-        cards = [slim(c, commanders) for c in map(json.loads, lines) if c["layout"] != "art_series"]
+        cards = [slim(c, commanders, tags) for c in map(json.loads, lines) if c["layout"] != "art_series"]
     tmp = DB.with_suffix(".tmp")
     tmp.write_text(json.dumps(cards))
     tmp.replace(DB)
@@ -76,7 +112,10 @@ def download_db():
 def load_db():
     global db, db_mtime
     with db_lock:  # requests run in threads; only one should download
-        if not DB.exists() or time.time() - DB.stat().st_mtime > MAX_AGE:
+        if DB.exists() and DB.stat().st_mtime != db_mtime:
+            db, db_mtime = json.loads(DB.read_text()), DB.stat().st_mtime
+        # also rebuild a database written before cards carried strategy tags
+        if not DB.exists() or time.time() - DB.stat().st_mtime > MAX_AGE or (db and "tags" not in db[0]):
             try:
                 download_db()
             except Exception as e:
@@ -91,7 +130,8 @@ def owned_cards():
     load_db()
     names, collection = set(), HERE / "Cards.txt"
     for line in (collection.read_text() if collection.exists() else "").splitlines():
-        m = re.match(r"^\s*\d+\s+(.+?)\s+\([^)]+\)", line) or re.match(r"^\s*\d+\s+(.+?)\s*$", line)
+        # "Sol Ring", "1 Sol Ring" or "1 Sol Ring (C21) 263"; any quantity is ignored
+        m = re.match(r"^\s*(?:\d+x?\s+)?(.+?)(?:\s+\([^)]+\).*)?\s*$", line)
         if m:
             names.add(m.group(1).lower().strip())
     return [c for c in db if c["name"].lower() in names or c["name"].split(" // ")[0].lower() in names]

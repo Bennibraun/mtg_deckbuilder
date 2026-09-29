@@ -104,7 +104,7 @@
   <h3>Commander</h3>
   <div id="cmdbox"></div>
   <h3>Deck (<span id="count">0</span>)</h3>
-  <div class="deckopts">Group <select id="dgroup"><option value="type">type</option><option value="cost">mana value</option><option value="color">color</option><option value="none">none</option></select>
+  <div class="deckopts">Group <select id="dgroup"><option value="type">type</option><option value="cost">mana value</option><option value="color">color</option><option value="strategy">strategy</option><option value="none">none</option></select>
   Sort <select id="dsort"><option value="cmc">mana value</option><option value="name">name</option><option value="added">added</option></select></div>
   <div id="deck"></div>
   <div class="buttons"><button id="export">Copy decklist</button>
@@ -214,13 +214,16 @@ const small = c => c.image_uris?.small || c.card_faces?.[0]?.image_uris?.small;
 const big = url => url?.replace('/small/', '/normal/');
 const large = url => url?.replace('/small/', '/large/');
 const colorsOf = c => c.colors || c.card_faces?.[0]?.colors || [];
-const remember = c => { deck.info[c.name] = { img: small(c), type: c.type_line, cmc: c.cmc ?? 0, colors: colorsOf(c) }; };
+// tags (strategies from Scryfall Tagger) only come with database entries, see fillDeckInfo
+const remember = c => { deck.info[c.name] = { img: small(c), type: c.type_line, cmc: c.cmc ?? 0, colors: colorsOf(c), tags: c.tags }; };
 const COLORS = { W: 'White', U: 'Blue', B: 'Black', R: 'Red', G: 'Green' };
+// Each grouper returns the groups a card belongs to; a card can have several strategies.
 const groupers = {
-  type: i => typeOf(i.type),
-  cost: i => i.cmc >= 7 ? '7+' : String(i.cmc),
-  color: i => i.colors.length > 1 ? 'Multicolor' : COLORS[i.colors[0]] || 'Colorless',
-  none: () => 'Cards',
+  type: i => [typeOf(i.type)],
+  cost: i => [i.cmc >= 7 ? '7+' : String(i.cmc)],
+  color: i => [i.colors.length > 1 ? 'Multicolor' : COLORS[i.colors[0]] || 'Colorless'],
+  strategy: i => i.tags?.length ? i.tags : ['No strategy tag'],
+  none: () => ['Cards'],
 };
 const groupOrder = {
   type: [...TYPES, 'Other'],
@@ -228,18 +231,25 @@ const groupOrder = {
   color: [...Object.values(COLORS), 'Multicolor', 'Colorless'],
   none: ['Cards'],
 };
+// strategies are ordered by how many cards they have
+const orderGroups = (by, groups) => by !== 'strategy' ? groupOrder[by] : Object.keys(groups)
+  .sort((a, b) => (a === 'No strategy tag') - (b === 'No strategy tag') || groups[b].length - groups[a].length);
+
+$('preview').onload = e => { if (e.target.src === e.target.dataset.want) e.target.style.display = 'block'; };
 
 function preview(el, img) {
   const p = $('preview');
   el.onmouseenter = () => {
     if (!img) return;
-    const r = el.getBoundingClientRect();
-    p.src = large(img);
+    const r = el.getBoundingClientRect(), src = large(img);
     p.style.top = Math.max(8, Math.min(r.top - 60, innerHeight - 480)) + 'px';
     p.style.left = (r.left - 348) + 'px';
-    p.style.display = 'block';
+    // stay hidden until the new image has loaded, so the previous card never flashes
+    p.dataset.want = src;
+    if (p.src === src && p.complete) p.style.display = 'block';
+    else { p.style.display = 'none'; p.src = src; }
   };
-  el.onmouseleave = () => { p.style.display = 'none'; };
+  el.onmouseleave = () => { p.dataset.want = ''; p.style.display = 'none'; };
 }
 
 function renderDeck() {
@@ -258,9 +268,9 @@ function renderDeck() {
   const info = n => ({ cmc: 0, colors: [], ...deck.info[n] });
   const names = [...deck.cards];
   if (sort !== 'added') names.sort((a, b) => sort === 'cmc' && info(a).cmc - info(b).cmc || a.localeCompare(b));
-  for (const n of names) (groups[groupers[by](info(n))] ??= []).push(n);
+  for (const n of names) for (const g of groupers[by](info(n))) (groups[g] ??= []).push(n);
   $('deck').innerHTML = '';
-  for (const t of groupOrder[by]) {
+  for (const t of orderGroups(by, groups)) {
     if (!groups[t]) continue;
     const g = document.createElement('div');
     g.className = 'group';
@@ -280,9 +290,9 @@ function renderDeck() {
   redraw();
 }
 
-// Fill in images and types for deck cards saved before they were stored.
+// Fill in database info (strategy tags, and images and types for older decks).
 async function fillDeckInfo() {
-  const missing = [deck.commander, ...deck.cards].filter(n => n && deck.info[n]?.cmc === undefined);
+  const missing = [deck.commander, ...deck.cards].filter(n => n && deck.info[n]?.tags === undefined);
   if (!missing.length) return;
   const cards = await (await fetch('cards.json', { method: 'POST', body: JSON.stringify(missing) })).json();
   cards.forEach(remember);
@@ -293,6 +303,7 @@ function addCard(c) {
   if (c.name !== deck.commander && !deck.cards.includes(c.name)) deck.cards.push(c.name);
   remember(c);
   save(); renderDeck();
+  if (!c.tags) fillDeckInfo();
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
