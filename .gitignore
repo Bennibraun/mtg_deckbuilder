@@ -1,5 +1,7 @@
 deckbuilder/Cards.txt
 deckbuilder/cards-db.json
-deckbuilder/cards-db.tmp
+deckbuilder/cards-db-v2.json
 deckbuilder/decks.json
-deckbuilder/decks.tmp
+deckbuilder/additions.json
+deckbuilder/edhrec-cache/
+deckbuilder/*.tmp

@@ -4,18 +4,24 @@
 <meta charset="utf-8">
 <title>Deckbuilder</title>
 <style>
-  :root { --bg: #16171a; --panel: #1e1f23; --line: #2e3036; --text: #e4e4e7; --dim: #9a9aa3; --accent: #9b6bff; --own: #3ec46d; }
+  :root { --bg: #16171a; --panel: #1e1f23; --line: #2e3036; --text: #e4e4e7; --dim: #9a9aa3; --accent: #9b6bff; --own: #3ec46d; --warn: #f0a030; --bad: #f55; }
   * { box-sizing: border-box; }
   body { font: 14px/1.4 system-ui, sans-serif; margin: 0; display: flex; height: 100vh; background: var(--bg); color: var(--text); }
   #main { flex: 1; overflow-y: auto; padding: 16px 20px; }
   #side { width: 340px; overflow-y: auto; padding: 16px; background: var(--panel); border-left: 1px solid var(--line); }
-  input, select, button { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+  input, select, button, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
   input[type=checkbox] { accent-color: var(--accent); padding: 0; }
-  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
   button { cursor: pointer; background: var(--panel); }
   button:hover, .upload:hover { border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
   .upload { display: inline-block; cursor: pointer; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
   label { cursor: pointer; white-space: nowrap; }
+  #tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+  #tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 6px 12px; color: var(--dim); }
+  #tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+  .view { display: none; }
+  .view.on { display: block; }
   #bar { display: flex; gap: 8px; flex-wrap: wrap; }
   #bar #q { flex: 2; min-width: 240px; }
   #bar #name { flex: 1; min-width: 160px; }
@@ -28,7 +34,8 @@
   .row input[type=number] { width: 90px; }
   #querybar { margin: 12px 0 4px; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
   #full { color: var(--dim); font-size: 12px; }
-  #status { color: var(--accent); font-size: 12px; }
+  .status { color: var(--accent); font-size: 12px; }
+  .dim { color: var(--dim); font-size: 12px; }
   h3 { margin: 16px 0 8px; font-size: 15px; font-weight: 600; }
   h4 { margin: 12px 0 4px; font-size: 13px; color: var(--dim); }
   .results { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
@@ -37,9 +44,11 @@
   .card:hover img { box-shadow: 0 12px 40px rgba(0,0,0,.7); }
   .card img { width: 100%; aspect-ratio: 488 / 680; border-radius: 10px; display: block; }
   .card.owned::after { content: "owned"; position: absolute; top: 6px; right: 6px; background: var(--own); color: #000; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; }
-  .card button { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); font-size: 11px; padding: 3px 8px; opacity: 0; }
-  .card:hover button { opacity: 1; }
+  .card .acts { position: absolute; bottom: 30px; left: 0; right: 0; display: flex; justify-content: center; gap: 4px; opacity: 0; }
+  .card:hover .acts { opacity: 1; }
+  .card .acts button { font-size: 11px; padding: 3px 8px; }
   .card .edh { position: absolute; bottom: 6px; left: 6px; background: rgba(0,0,0,.75); color: var(--accent); font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; }
+  .card .where { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,.75); color: var(--text); font-size: 11px; padding: 1px 6px; border-radius: 4px; }
   #querybar select { padding: 3px 6px; font-size: 12px; }
   #querybar .sort { margin-left: auto; display: flex; gap: 6px; align-items: center; color: var(--dim); font-size: 12px; }
   #cmdbox { position: relative; width: 240px; margin: 0 auto; }
@@ -51,21 +60,69 @@
   li { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 4px; }
   li:hover { background: var(--bg); }
   li .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  li .q { color: var(--dim); font-size: 12px; min-width: 14px; text-align: right; }
   li .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); flex: none; }
   li.owned .dot { background: var(--own); }
+  li.short .dot { background: var(--warn); }
   li .x { border: none; background: none; color: var(--dim); padding: 0 4px; visibility: hidden; }
   li:hover .x { visibility: visible; }
-  li .x:hover { color: #f55; }
+  li .x:hover { color: var(--accent); }
+  li .x.del:hover { color: var(--bad); }
   #preview { position: fixed; width: 336px; border-radius: 12px; pointer-events: none; display: none; box-shadow: 0 8px 30px rgba(0,0,0,.6); z-index: 10; }
-  .decksel { display: flex; gap: 6px; }
-  .decksel select { flex: 1; min-width: 0; }
+  .decksel { display: flex; gap: 6px; flex-wrap: wrap; }
+  .decksel select { flex: 1 1 100%; min-width: 0; }
+  .decksel button { flex: 1; padding: 4px 6px; font-size: 12px; }
+  #quick { width: 100%; margin-top: 10px; }
   .deckopts { display: flex; gap: 6px; align-items: center; color: var(--dim); font-size: 12px; }
   .deckopts select { padding: 3px 6px; font-size: 12px; }
   #side .buttons { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  #side details { margin-top: 12px; }
+  #side details > div { padding: 0 12px 12px; }
+  .bars { display: flex; align-items: flex-end; gap: 4px; height: 70px; margin-top: 6px; }
+  .bars div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; position: relative; font-size: 10px; color: var(--dim); }
+  .bars i { display: block; width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; }
+  .bars b { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--warn); }
+  .meter { display: grid; grid-template-columns: 80px 1fr 64px; gap: 6px; align-items: center; font-size: 12px; margin: 3px 0; }
+  .meter span:last-child { text-align: right; }
+  .meter .track { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+  .meter .track i { display: block; height: 100%; background: var(--own); }
+  .meter.low .track i { background: var(--warn); }
+  .log { font-size: 12px; margin: 4px 0; }
+  .log .add { color: var(--own); }
+  .log .rem { color: var(--bad); }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; width: min(600px, 90vw); }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog textarea { width: 100%; height: 300px; }
+  dialog .row { margin-top: 8px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  #fitnames { width: 100%; height: 110px; margin-bottom: 8px; }
+  .fit { display: grid; grid-template-columns: 90px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .fit img { width: 90px; border-radius: 5px; display: block; }
+  .fit .title { font-weight: 600; }
+  .fit .title .tag { font-weight: 400; margin-left: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .chip { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 12px; min-width: 200px; }
+  .chip.best { border-color: var(--accent); }
+  .chip .d { font-weight: 600; }
+  .chip .why { color: var(--dim); }
+  .chip .acts { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+  .chip .acts button { font-size: 11px; padding: 2px 6px; }
+  .chip select { font-size: 11px; padding: 1px 4px; max-width: 150px; }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--bg); color: var(--dim); }
+  .tag.own { background: var(--own); color: #000; font-weight: 600; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 500; }
+  td.num, th.num { text-align: right; }
+  .cmdrow { display: flex; gap: 10px; align-items: center; }
+  .cmdrow img { width: 40px; border-radius: 3px; }
 </style>
 </head>
 <body>
 <div id="main">
+  <nav id="tabs"><button data-view="search">Search</button><button data-view="fit">Fit check</button><button data-view="tune">Tune deck</button><button data-view="coll">Collection</button></nav>
+
+  <section id="v-search" class="view">
   <div id="form">
   <div id="bar">
     <input id="q" placeholder="Raw Scryfall query (optional)">
@@ -82,7 +139,7 @@
     <span>Stats</span><div class="row"><select id="stat"><option value="mv">Mana value</option><option value="pow">Power</option><option value="tou">Toughness</option><option value="pt">Power + toughness</option><option value="loy">Loyalty</option></select><select id="statop"><option value="=">=</option><option value="<">&lt;</option><option value="<=">&le;</option><option value=">">&gt;</option><option value=">=">&ge;</option><option value="!=">&ne;</option></select><input id="statv" type="number" min="0"></div>
     <span>Games</span><div class="row"><label><input type="checkbox" class="game" value="paper"> Paper</label><label><input type="checkbox" class="game" value="arena"> Arena</label><label><input type="checkbox" class="game" value="mtgo"> Magic Online</label></div>
     <span>Format</span><div class="row"><select id="fop"><option value="f">Legal</option><option value="banned">Banned</option><option value="restricted">Restricted</option></select><select id="fmt"><option value="">any</option><option value="commander" selected>commander</option><option value="standard">standard</option><option value="future">future</option><option value="pioneer">pioneer</option><option value="modern">modern</option><option value="legacy">legacy</option><option value="vintage">vintage</option><option value="pauper">pauper</option><option value="paupercommander">paupercommander</option><option value="oathbreaker">oathbreaker</option><option value="brawl">brawl</option><option value="standardbrawl">standardbrawl</option><option value="historic">historic</option><option value="timeless">timeless</option><option value="alchemy">alchemy</option><option value="explorer">explorer</option><option value="gladiator">gladiator</option><option value="penny">penny</option><option value="duel">duel</option><option value="oldschool">oldschool</option><option value="premodern">premodern</option><option value="predh">predh</option></select><label><input type="checkbox" id="isCmd"> can be commander</label></div>
-    <span>Sets</span><div class="row"><input id="set" list="sets" placeholder="set codes, e.g. war mh3"><datalist id="sets"></datalist></div>
+    <span>Sets</span><div class="row"><input id="set" list="sets" placeholder="set codes, e.g. war mh3"></div>
     <span>Rarity</span><div class="row"><label><input type="checkbox" class="rar" value="common"> Common</label><label><input type="checkbox" class="rar" value="uncommon"> Uncommon</label><label><input type="checkbox" class="rar" value="rare"> Rare</label><label><input type="checkbox" class="rar" value="mythic"> Mythic</label></div>
     <span>Criteria</span><div class="row"><input id="crit" placeholder="is: values, e.g. fetchland -reprint"></div>
     <span>Price</span><div class="row"><select id="cur"><option value="usd">USD</option><option value="eur">EUR</option><option value="tix">TIX</option></select><select id="curop"><option value="=">=</option><option value="<">&lt;</option><option value="<=">&le;</option><option value=">">&gt;</option><option value=">=">&ge;</option><option value="!=">&ne;</option></select><input id="price" type="number" min="0" step="0.01"></div>
@@ -93,67 +150,213 @@
   </div>
   </details>
   </div>
-  <div id="querybar"><code id="full"></code><span id="status"></span><span class="sort">Sort <select id="order"><option value="edhrec">EDHREC popularity</option><option value="syn">Synergy with commander</option><option value="inc">Inclusion with commander</option><option value="name">name</option><option value="cmc">cmc</option><option value="power">power</option><option value="toughness">toughness</option><option value="color">color</option><option value="rarity">rarity</option><option value="usd">usd</option><option value="eur">eur</option><option value="tix">tix</option><option value="released">released</option><option value="set">set</option><option value="artist">artist</option><option value="penny">penny</option><option value="review">review</option></select><select id="dir"><option value="auto">auto</option><option value="asc">ascending</option><option value="desc">descending</option></select></span></div>
+  <div id="querybar"><code id="full"></code><span id="status" class="status"></span><span class="sort">Sort <select id="order"><option value="edhrec">EDHREC popularity</option><option value="syn">Synergy with commander</option><option value="inc">Inclusion with commander</option><option value="name">name</option><option value="cmc">cmc</option><option value="power">power</option><option value="toughness">toughness</option><option value="color">color</option><option value="rarity">rarity</option><option value="usd">usd</option><option value="eur">eur</option><option value="tix">tix</option><option value="released">released</option><option value="set">set</option><option value="artist">artist</option><option value="penny">penny</option><option value="review">review</option></select><select id="dir"><option value="auto">auto</option><option value="asc">ascending</option><option value="desc">descending</option></select></span></div>
   <h3>Owned (<span id="nOwned">0</span>)</h3>
   <div id="owned" class="results"></div>
   <h3>Not owned (<span id="nOther">0</span>)</h3>
   <div id="other" class="results"></div>
+  </section>
+
+  <section id="v-fit" class="view">
+  <p class="dim">Which of your decks does a card belong in? Scores use EDHREC synergy and inclusion for each deck's commander (and theme), whether EDHREC lists the commander among the card's top commanders, and creature types the deck is built around. Only decks whose color identity allows the card are considered.</p>
+  <textarea id="fitnames" placeholder="Paste card names, one per line (counts and set codes are fine, e.g. a pack or a decklist)"></textarea>
+  <div class="toolbar">
+    <button id="fitgo">Check pasted cards</button>
+    <input id="fitset" list="sets" placeholder="set code" size="8"><button id="setgo">Review set</button>
+    <button id="fitnew">Latest collection additions</button>
+    <span class="dim" style="margin-left:auto"><label><input type="checkbox" id="fitowned"> owned only</label> <label><input type="checkbox" id="fitall"> show cards with no match</label></span>
+  </div>
+  <div id="fitstatus" class="status"></div>
+  <div id="fitout"></div>
+  </section>
+
+  <section id="v-tune" class="view">
+  <div class="toolbar"><h3 style="margin:0" id="tunetitle"></h3>
+    <span class="dim" style="margin-left:auto">EDHREC theme <select id="theme"></select></span></div>
+  <div id="tunestatus" class="status"></div>
+  <h3>Cut candidates <span class="dim">lowest EDHREC synergy + inclusion; cards EDHREC doesn't list for this commander score 0</span></h3>
+  <ul id="cuts"></ul>
+  <h3>Upgrades you own <span class="dim">high-synergy cards from your collection that aren't in this deck</span></h3>
+  <div id="upgrades" class="results"></div>
+  <h3>Compared with EDHREC's average deck</h3>
+  <div id="avg"></div>
+  </section>
+
+  <section id="v-coll" class="view">
+  <h3>Shopping list <span class="dim">cards in your decks that you don't own</span></h3>
+  <div class="toolbar"><button id="shopgo">Refresh prices</button><button id="shopcopy">Copy list</button><span id="shopstatus" class="status"></span></div>
+  <div id="shop"></div>
+  <h3>Not enough copies <span class="dim">cards used by more decks than you own copies of</span></h3>
+  <div id="short"></div>
+  <h3>Commanders you could build <span class="dim">share of each owned commander's EDHREC cards (weighted by inclusion) that you already own</span></h3>
+  <div class="toolbar"><button id="scango">Scan my commanders</button><span id="scanstatus" class="status"></span></div>
+  <div id="scan"></div>
+  </section>
 </div>
+
 <div id="side">
-  <div class="decksel"><select id="decks"></select><button id="newdeck">New</button><button id="rendeck">Rename</button><button id="deldeck">Delete</button></div>
+  <div class="decksel"><select id="decks"></select><button id="newdeck">New</button><button id="impdeck">Import</button><button id="rendeck">Rename</button><button id="deldeck">Delete</button></div>
+  <input id="quick" list="allnames" placeholder="Quick add a card (press / to focus)"><datalist id="allnames"></datalist>
   <h3>Commander</h3>
   <div id="cmdbox"></div>
   <h3>Deck (<span id="count">0</span>)</h3>
   <div class="deckopts">Group <select id="dgroup"><option value="type">type</option><option value="cost">mana value</option><option value="color">color</option><option value="none">none</option></select>
   Sort <select id="dsort"><option value="cmc">mana value</option><option value="name">name</option><option value="added">added</option></select></div>
   <div id="deck"></div>
+  <div id="maybebox"></div>
+  <details id="statsbox"><summary>Stats</summary><div id="stats"></div></details>
+  <details id="histbox"><summary>History</summary><div><button id="undo">Undo last change</button><div id="history"></div></div></details>
   <div class="buttons"><button id="export">Copy decklist</button>
   <label class="upload">Upload Cards.txt<input type="file" id="upload" accept=".txt,text/plain" hidden></label></div>
 </div>
 <img id="preview">
+<datalist id="sets"></datalist>
+
+<dialog id="impdlg"><form method="dialog">
+  <h3 style="margin-top:0">Import a decklist</h3>
+  <p class="dim">Paste a list from Moxfield, Archidekt, MTG Arena or plain "1 Card Name" lines. A "Commander" section or a [Commander] tag sets the commander; "Sideboard" or "Maybeboard" sections go to the maybeboard.</p>
+  <textarea id="imptext"></textarea>
+  <div class="row"><input id="impname" placeholder="Deck name"><label><input type="checkbox" id="impfirst"> first card is the commander</label></div>
+  <div class="row"><button value="ok">Import</button><button value="cancel">Cancel</button></div>
+</form></dialog>
+
 <script>
 const $ = id => document.getElementById(id);
 const norm = s => s.toLowerCase().trim();
-let owned = new Set(), ownedCards = [];
+const front = name => name.split(' // ')[0];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const pct = x => Math.round(x * 100) + '%';
+
+let ownedCards = [], ownedN = new Map();  // owned copies by lowercase name (full and front face)
 // Decks live on the server in decks.json; every change is saved right away.
 let decks = {}, deck = null;
-let edh = {}, edhCards = [];  // EDHREC stats by name for the current commander, and their database entries
+let edh = {}, edhCards = [], edhPageNow = null;  // EDHREC stats by name for the current deck, their database entries, and the page
+const cardData = {}, byNorm = new Map();  // database entries by name and by lowercase name, filled as cards are looked up
+function keep(c) { cardData[c.name] = c; for (const n of [c.name, front(c.name)]) byNorm.set(norm(n), c); }
 
-const isOwned = name => owned.has(norm(name)) || owned.has(norm(name.split(' // ')[0]));
+const ownedCount = name => ownedN.get(norm(name)) ?? ownedN.get(norm(front(name))) ?? 0;
+const isOwned = name => ownedCount(name) > 0;
+
+async function lookup(names) {
+  const get = n => n && (cardData[n] || byNorm.get(norm(n)));
+  const want = [...new Set(names)].filter(n => n && !get(n));
+  if (want.length) (await (await fetch('cards.json', { method: 'POST', body: JSON.stringify(want) })).json()).forEach(keep);
+  return names.map(get);
+}
 
 async function loadCollection() {
   $('status').textContent = 'loading card database...';
   ownedCards = await (await fetch('owned.json')).json();
-  owned = new Set(ownedCards.flatMap(c => [norm(c.name), norm(c.name.split(' // ')[0])]));
+  ownedN = new Map();
+  for (const c of ownedCards) { keep(c); ownedN.set(norm(c.name), c.owned); ownedN.set(norm(front(c.name)), c.owned); }
+  $('allnames').replaceChildren(...ownedCards.map(c => new Option(c.name)));
   $('status').textContent = `${ownedCards.length} owned cards loaded`;
 }
 
 $('upload').onchange = async () => {
   const file = $('upload').files[0];
   if (!file || !confirm(`Replace your collection with ${file.name}?`)) return ($('upload').value = '');
-  await fetch('Cards.txt', { method: 'POST', body: file });
+  const added = await (await fetch('Cards.txt', { method: 'POST', body: file })).json();
   $('upload').value = '';
   await loadCollection();
   renderDeck(); searchSoon();
+  const names = Object.keys(added);
+  if (names.length && confirm(`${names.length} new cards since the last upload. Check which decks they fit?`)) { showView('fit'); runFit(names, 'new since last upload'); }
 };
+
+// ---------- decks ----------
 
 let saving = Promise.resolve();  // keep saves in order
 const postDeck = (name, d) => saving = saving.then(() =>
   fetch('decks.json', { method: 'POST', body: JSON.stringify({ name, deck: d }) }));
-function save() { postDeck(deck.name, deck); }
+function save(d = deck) { postDeck(d.name, d); }
 
-const emptyDeck = name => ({ name, commander: null, identity: '', cards: [], info: {} });
+const emptyDeck = name => ({ name, commander: null, identity: '', theme: '', cards: [], qty: {}, maybe: [], log: [], info: {} });
+function upgrade(d) {  // fields added after decks were first saved
+  d.info ??= {}; d.qty ??= {}; d.maybe ??= []; d.log ??= []; d.theme ??= '';
+  return d;
+}
+
+const qty = (d, name) => d.qty[name] || 1;
+const deckSize = d => d.cards.reduce((n, c) => n + qty(d, c), d.commander ? 1 : 0);
+const inDeck = (d, name) => d.commander === name || d.cards.includes(name);
+const decksWith = name => Object.values(decks).filter(d => inDeck(d, name));
+
+// Every change to the main deck goes through here so it lands in the history.
+function change(d, entry) {
+  d.log.push({ t: new Date().toISOString(), ...entry });
+  if (d.log.length > 1000) d.log.splice(0, d.log.length - 1000);
+}
+
+function addTo(d, c) {
+  remember(d, c);
+  if (inDeck(d, c.name)) {
+    if (!d.info[c.name].any) return false;
+    const from = qty(d, c.name);
+    d.qty[c.name] = from + 1;
+    change(d, { op: 'q', name: c.name, from, to: from + 1 });
+  } else {
+    d.cards.push(c.name);
+    change(d, { op: '+', name: c.name });
+  }
+  d.maybe = d.maybe.filter(n => n !== c.name);
+  save(d);
+  return true;
+}
+
+function removeFrom(d, name) {
+  if (!d.cards.includes(name)) return;
+  d.cards = d.cards.filter(n => n !== name);
+  change(d, { op: '-', name, n: qty(d, name) });
+  delete d.qty[name];
+  save(d);
+}
+
+function setQty(d, name, to) {
+  if (to < 1) return removeFrom(d, name);
+  change(d, { op: 'q', name, from: qty(d, name), to });
+  if (to === 1) delete d.qty[name]; else d.qty[name] = to;
+  save(d);
+}
+
+function setCommanderOf(d, c) {
+  change(d, { op: 'c', name: c?.name || null, from: d.commander, fromId: d.identity });
+  if (c) {
+    remember(d, c);
+    d.commander = c.name;
+    d.identity = c.color_identity.join('').toLowerCase();
+    d.cards = d.cards.filter(n => n !== c.name);
+  } else { d.commander = null; d.identity = ''; }
+  d.theme = '';
+  save(d);
+}
+
+function undo() {
+  const e = deck.log.at(-1);
+  if (!e || e.op === 'import') return;
+  deck.log.pop();
+  if (e.op === '+') { deck.cards = deck.cards.filter(n => n !== e.name); delete deck.qty[e.name]; }
+  if (e.op === '-') { deck.cards.push(e.name); if (e.n > 1) deck.qty[e.name] = e.n; }
+  if (e.op === 'q') { if (e.from > 1) deck.qty[e.name] = e.from; else delete deck.qty[e.name]; if (!deck.cards.includes(e.name)) deck.cards.push(e.name); }
+  if (e.op === 'c') { deck.commander = e.from; deck.identity = e.fromId || ''; }
+  save(); renderDeck();
+  if (e.op === 'c') loadEdh();
+}
+$('undo').onclick = undo;
 
 function renderDeckList() {
   $('decks').innerHTML = '';
-  for (const name of Object.keys(decks).sort()) $('decks').add(new Option(name, name, false, name === deck.name));
+  for (const name of Object.keys(decks).sort()) {
+    const d = decks[name];
+    $('decks').add(new Option(`${name} (${deckSize(d)})`, name, false, name === deck.name));
+  }
 }
 
 function openDeck(name) {
-  deck = decks[name];
-  deck.info ??= {};  // name -> {img, type, cmc, colors} for the sidebar
+  deck = upgrade(decks[name]);
   localStorage.setItem('deckName', name);
-  edh = {}; edhCards = [];
+  edh = {}; edhCards = []; edhPageNow = null;
   renderDeckList(); renderDeck(); fillDeckInfo(); loadEdh();
 }
 
@@ -163,13 +366,19 @@ function askName(suggestion) {
   return name && !decks[name] ? name : null;
 }
 
+function uniqueName(base) {
+  let name = base, i = 2;
+  while (decks[name]) name = `${base} ${i++}`;
+  return name;
+}
+
 async function loadDecks() {
   decks = await (await fetch('decks.json')).json();
+  Object.values(decks).forEach(upgrade);
   const old = JSON.parse(localStorage.getItem('deck') || 'null');  // deck saved in the browser before server storage
   if (old && (old.commander || old.cards?.length)) {
-    let name = 'My deck', i = 2;
-    while (decks[name]) name = `My deck ${i++}`;
-    decks[name] = { ...old, name };
+    const name = uniqueName('My deck');
+    decks[name] = upgrade({ ...old, name });
     postDeck(name, decks[name]);
   }
   localStorage.removeItem('deck');
@@ -205,6 +414,58 @@ $('deldeck').onclick = () => {
   openDeck(Object.keys(decks).sort()[0]);
 };
 
+// ---------- import ----------
+
+// Lines like "1 Name", "1x Name (SET) 123 *F*", "Name", with section headers
+// (Commander, Deck, Sideboard...) or Archidekt tags like [Commander{top}].
+function parseList(text) {
+  const out = [];
+  let section = 'deck';
+  for (let line of text.split('\n')) {
+    line = line.trim();
+    if (!line || line.startsWith('//') || line.startsWith('#')) continue;
+    const head = line.toLowerCase().replace(/[:\s]*(\(\d+\))?\s*$/, '');
+    if (/^commanders?$/.test(head)) { section = 'commander'; continue; }
+    if (/^(sideboard|maybeboard|maybe|considering|companion)$/.test(head)) { section = 'maybe'; continue; }
+    if (/^(deck|main|mainboard|main deck)$/.test(head)) { section = 'deck'; continue; }
+    const sb = /^sb:\s*/i.test(line);
+    line = line.replace(/^sb:\s*/i, '');
+    const m = line.match(/^(?:(\d+)x?\s+)?(.+?)(?:\s+\(\w+\)(?:\s+[\w-]+)?)?(?:\s+\*\w+\*)*(?:\s+\[([^\]]*)\])?(?:\s+\^[^^]*\^)?\s*$/);
+    if (!m) continue;
+    if (!m[1] && /\(\d+\)$/.test(line)) continue;  // "Creatures (30)" style group headers
+    const tag = (m[3] || '').toLowerCase();
+    const where = tag.includes('commander') ? 'commander' : /maybe|sideboard/.test(tag) || sb ? 'maybe' : section;
+    out.push({ n: Number(m[1] || 1), name: m[2].trim(), where });
+  }
+  return out;
+}
+
+$('impdeck').onclick = () => { $('imptext').value = ''; $('impname').value = ''; $('impdlg').showModal(); };
+$('impdlg').onclose = async () => {
+  if ($('impdlg').returnValue !== 'ok') return;
+  const rows = parseList($('imptext').value);
+  if (!rows.length) return alert('No cards found in the pasted text.');
+  if ($('impfirst').checked && !rows.some(r => r.where === 'commander')) rows[0].where = 'commander';
+  const cards = await lookup(rows.map(r => r.name));
+  const missing = rows.filter((r, i) => !cards[i]).map(r => r.name);
+  const name = uniqueName($('impname').value.trim() || rows.find(r => r.where === 'commander')?.name || 'Imported deck');
+  const d = decks[name] = emptyDeck(name);
+  rows.forEach((r, i) => {
+    const c = cards[i];
+    if (!c) return;
+    remember(d, c);
+    if (r.where === 'commander' && !d.commander) { d.commander = c.name; d.identity = c.color_identity.join('').toLowerCase(); }
+    else if (r.where === 'maybe') { if (!d.maybe.includes(c.name)) d.maybe.push(c.name); }
+    else if (!inDeck(d, c.name)) { d.cards.push(c.name); if (r.n > 1) d.qty[c.name] = r.n; }
+    else d.qty[c.name] = qty(d, c.name) + r.n;
+  });
+  change(d, { op: 'import', name: `${d.cards.length} cards` });
+  save(d); openDeck(name);
+  if (missing.length) alert(`Not found:\n${missing.join('\n')}`);
+};
+
+// ---------- sidebar ----------
+
 const TYPES = ['Creature', 'Planeswalker', 'Battle', 'Instant', 'Sorcery', 'Artifact', 'Enchantment', 'Land'];
 const LABELS = { Sorcery: 'Sorceries', Other: 'Other' };
 const typeOf = t => TYPES.find(x => (t || '').includes(x)) || 'Other';
@@ -212,7 +473,9 @@ const small = c => c.image_uris?.small || c.card_faces?.[0]?.image_uris?.small;
 const big = url => url?.replace('/small/', '/normal/');
 const large = url => url?.replace('/small/', '/large/');
 const colorsOf = c => c.colors || c.card_faces?.[0]?.colors || [];
-const remember = c => { deck.info[c.name] = { img: small(c), type: c.type_line, cmc: c.cmc ?? 0, colors: colorsOf(c) }; };
+const oracleOf = c => c.oracle_text || (c.card_faces || []).map(f => f.oracle_text || '').join('\n');
+const anyNumber = c => /\bBasic\b/.test(c.type_line) || /deck can have any number of cards named/i.test(oracleOf(c));
+const remember = (d, c) => { d.info[c.name] = { img: small(c), type: c.type_line, cmc: c.cmc ?? 0, colors: colorsOf(c), any: anyNumber(c) }; };
 const COLORS = { W: 'White', U: 'Blue', B: 'Black', R: 'Red', G: 'Green' };
 const groupers = {
   type: i => typeOf(i.type),
@@ -227,17 +490,42 @@ const groupOrder = {
   none: ['Cards'],
 };
 
-function preview(el, img) {
+function preview(elem, img) {
   const p = $('preview');
-  el.onmouseenter = () => {
+  elem.onmouseenter = () => {
     if (!img) return;
-    const r = el.getBoundingClientRect();
+    const r = elem.getBoundingClientRect();
     p.src = large(img);
     p.style.top = Math.max(8, Math.min(r.top - 60, innerHeight - 480)) + 'px';
-    p.style.left = (r.left - 348) + 'px';
+    p.style.left = (r.left > 360 ? r.left - 348 : r.right + 12) + 'px';
     p.style.display = 'block';
   };
-  el.onmouseleave = () => { p.style.display = 'none'; };
+  elem.onmouseleave = () => { p.style.display = 'none'; };
+}
+
+// Copies of a card used across all decks, when that's more than you own.
+function shortage(name) {
+  if (!isOwned(name) || deck.info[name]?.any) return null;
+  const users = decksWith(name);
+  const used = users.reduce((n, d) => n + (d.commander === name ? 1 : qty(d, name)), 0);
+  return used > ownedCount(name) ? `You own ${ownedCount(name)}, used ${used}× in: ${users.map(d => d.name).join(', ')}` : null;
+}
+
+function deckRow(name, { onName, buttons }) {
+  const li = el('li');
+  const short = shortage(name);
+  li.className = short ? 'short' : isOwned(name) ? 'owned' : '';
+  li.title = short || (isOwned(name) ? `owned (${ownedCount(name)})` : 'not owned');
+  li.append(el('span', 'dot'), el('span', 'q', qty(deck, name) > 1 ? qty(deck, name) : ''), el('span', 'n', name));
+  if (onName) { li.querySelector('.n').style.cursor = 'pointer'; li.querySelector('.n').onclick = onName; }
+  for (const [label, title, fn, cls] of buttons) {
+    const b = el('button', 'x' + (cls ? ' ' + cls : ''), label);
+    b.title = title;
+    b.onclick = e => { e.stopPropagation(); fn(); };
+    li.appendChild(b);
+  }
+  preview(li, deck.info[name]?.img);
+  return li;
 }
 
 function renderDeck() {
@@ -246,12 +534,9 @@ function renderDeck() {
   if (deck.commander) {
     box.innerHTML = `<img src="${big(deck.info[deck.commander]?.img) || ''}" alt=""><button>Remove</button>`;
     box.querySelector('img').alt = deck.commander;
-    box.querySelector('button').onclick = () => {
-      deck.commander = null; deck.identity = ''; edh = {}; edhCards = [];
-      save(); renderDeck(); searchSoon();
-    };
-  } else box.innerHTML = '<div class="empty">Hover a legendary creature in the results and click "Set commander"</div>';
-  $('count').textContent = deck.cards.length + (deck.commander ? 1 : 0);
+    box.querySelector('button').onclick = () => { setCommanderOf(deck, null); edh = {}; edhCards = []; renderDeck(); searchSoon(); };
+  } else box.innerHTML = '<div class="empty">Hover a legendary creature in the results and click "Commander", or use ★ in the deck list</div>';
+  $('count').textContent = deckSize(deck);
   const by = $('dgroup').value, sort = $('dsort').value, groups = {};
   const info = n => ({ cmc: 0, colors: [], ...deck.info[n] });
   const names = [...deck.cards];
@@ -260,40 +545,223 @@ function renderDeck() {
   $('deck').innerHTML = '';
   for (const t of groupOrder[by]) {
     if (!groups[t]) continue;
-    const g = document.createElement('div');
-    g.className = 'group';
+    const g = el('div', 'group');
     const label = by === 'type' ? LABELS[t] || t + 's' : by === 'cost' ? `Mana value ${t}` : t;
-    g.innerHTML = `<h4><span>${label}</span><span>${groups[t].length}</span></h4><ul></ul>`;
+    g.innerHTML = `<h4><span>${label}</span><span>${groups[t].reduce((n, c) => n + qty(deck, c), 0)}</span></h4><ul></ul>`;
     for (const name of groups[t]) {
-      const li = document.createElement('li');
-      li.className = isOwned(name) ? 'owned' : '';
-      li.innerHTML = '<span class="dot"></span><span class="n"></span><button class="x" title="Remove">×</button>';
-      li.querySelector('.n').textContent = name;
-      li.querySelector('.x').onclick = () => { deck.cards = deck.cards.filter(n => n !== name); save(); renderDeck(); };
-      preview(li, deck.info[name]?.img);
-      g.querySelector('ul').appendChild(li);
+      const i = info(name), buttons = [];
+      if (i.any) buttons.push(['−', 'One fewer', () => { setQty(deck, name, qty(deck, name) - 1); renderDeck(); }], ['+', 'One more', () => { setQty(deck, name, qty(deck, name) + 1); renderDeck(); }]);
+      if (/Legendary.*Creature/.test(i.type || '')) buttons.push(['★', 'Make commander', async () => { const [c] = await lookup([name]); setCommanderOf(deck, c); renderDeck(); loadEdh(); }]);
+      buttons.push(['↓', 'Move to maybeboard', () => { removeFrom(deck, name); deck.maybe.push(name); save(); renderDeck(); }]);
+      buttons.push(['×', 'Remove', () => { removeFrom(deck, name); renderDeck(); }, 'del']);
+      g.querySelector('ul').appendChild(deckRow(name, { buttons }));
     }
     $('deck').appendChild(g);
   }
+  renderMaybe(); renderHistory(); renderDeckList(); renderStats();
   redraw();
+  if (currentView === 'tune') renderTune();
+}
+
+function renderMaybe() {
+  const box = $('maybebox');
+  box.innerHTML = '';
+  if (!deck.maybe.length) return;
+  box.append(el('h3', null, `Maybeboard (${deck.maybe.length})`));
+  const ul = el('ul');
+  for (const name of deck.maybe) {
+    ul.appendChild(deckRow(name, { onName: undefined, buttons: [
+      ['↑', 'Move into the deck', async () => { const [c] = await lookup([name]); addTo(deck, c); renderDeck(); }],
+      ['×', 'Remove', () => { deck.maybe = deck.maybe.filter(n => n !== name); save(); renderDeck(); }, 'del'],
+    ] }));
+  }
+  box.append(ul);
+}
+
+function addMaybe(d, c) {
+  remember(d, c);
+  if (!d.maybe.includes(c.name) && !inDeck(d, c.name)) d.maybe.push(c.name);
+  save(d);
+}
+
+function renderHistory() {
+  const box = $('history');
+  box.innerHTML = '';
+  $('undo').disabled = !deck.log.length || deck.log.at(-1).op === 'import';
+  const days = {};
+  for (const e of deck.log) (days[new Date(e.t).toLocaleDateString('sv')] ??= []).push(e);  // sv formats as YYYY-MM-DD
+  for (const day of Object.keys(days).sort().reverse().slice(0, 30)) {
+    box.append(el('h4', null, day));
+    for (const e of days[day].slice().reverse()) {
+      const line = el('div', 'log');
+      if (e.op === '+') line.append(el('span', 'add', '+ ' + e.name));
+      else if (e.op === '-') line.append(el('span', 'rem', '− ' + e.name + (e.n > 1 ? ` ×${e.n}` : '')));
+      else if (e.op === 'q') line.textContent = `${e.name}: ${e.from} → ${e.to}`;
+      else if (e.op === 'c') line.textContent = e.name ? `Commander: ${e.name}` : `Removed commander ${e.from}`;
+      else if (e.op === 'import') line.textContent = `Imported (${e.name})`;
+      box.append(line);
+    }
+  }
 }
 
 // Fill in images and types for deck cards saved before they were stored.
 async function fillDeckInfo() {
-  const missing = [deck.commander, ...deck.cards].filter(n => n && deck.info[n]?.cmc === undefined);
-  if (!missing.length) return;
-  const cards = await (await fetch('cards.json', { method: 'POST', body: JSON.stringify(missing) })).json();
-  cards.forEach(remember);
-  save(); renderDeck();
+  const d = deck;
+  const names = [d.commander, ...d.cards, ...d.maybe].filter(Boolean);
+  await lookup(names);
+  const missing = names.filter(n => d.info[n]?.any === undefined && cardData[n]);
+  missing.forEach(n => remember(d, cardData[n]));
+  if (missing.length) save(d);
+  if (d === deck) renderDeck();
 }
 
-function addCard(c) {
-  if (c.name !== deck.commander && !deck.cards.includes(c.name)) deck.cards.push(c.name);
-  remember(c);
-  save(); renderDeck();
+$('quick').onkeydown = async e => {
+  if (e.key !== 'Enter') return;
+  const name = $('quick').value.trim();
+  if (!name) return;
+  const [c] = await lookup([name]);
+  if (!c) { $('quick').style.borderColor = 'var(--bad)'; return; }
+  $('quick').style.borderColor = '';
+  $('quick').value = '';
+  $('status').textContent = addTo(deck, c) ? `added ${c.name}` : `${c.name} is already in the deck`;
+  renderDeck();
+};
+addEventListener('keydown', e => {
+  if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); $('quick').focus(); }
+  if (e.key === 'Escape') $('preview').style.display = 'none';
+});
+
+// ---------- stats ----------
+
+const lower = s => (s || '').toLowerCase().replace(/\([^)]*\)/g, '');
+const isLand = c => /\bLand\b/.test(c.type_line.split(' // ')[0]);
+const ROLES = [
+  ['Ramp', c => !isLand(c) && /\badd \{|\badd (one|two|three|x) mana|mana of any|search your library for (a|up to \w+) (basic )?(land|forest|plains|island|swamp|mountain)|put (a|up to \w+|those) lands? cards? .*onto the battlefield/.test(lower(oracleOf(c))), 10],
+  ['Card draw', c => /\bdraws? (a|an additional|two|three|four|five|x|that many|\w+) cards?|draw cards equal/.test(lower(oracleOf(c))), 10],
+  ['Removal', c => /(destroy|exile) (up to (one|\w+) )?target|deals? (\d+|x|damage equal to [^.]*) damage to (any target|target)|counter target|return target (nonland )?(creature|permanent|artifact|enchantment)[^.]* to (its owner's|their owner's) hand|fights? (target|up to)|(target (player|opponent)|each opponent) sacrifices/.test(lower(oracleOf(c))), 8],
+  ['Board wipes', c => /(destroy|exile) (all|each)|(all|each) creatures? gets? -|deals? (\d+|x) damage to each creature|return all [^.]* to their owners'? hands/.test(lower(oracleOf(c))), 3],
+];
+
+function renderStats() {
+  const box = $('stats');
+  if (!$('statsbox').open) return;
+  const cards = deck.cards.map(n => cardData[n]).filter(Boolean);
+  box.innerHTML = '';
+  if (cards.length < deck.cards.length) { box.textContent = 'loading...'; return; }
+  const n = c => qty(deck, c.name);
+  const all = deck.commander && cardData[deck.commander] ? [cardData[deck.commander], ...cards] : cards;
+
+  // mana curve of nonland cards, with EDHREC's average deck as dashed markers
+  box.append(el('h4', null, 'Mana curve (nonland)'));
+  const curve = Array(8).fill(0), avg = Array(8).fill(0);
+  for (const c of cards) if (!isLand(c)) curve[Math.min(7, Math.floor(c.cmc))] += n(c);
+  for (const [k, v] of Object.entries(edhPageNow?.curve || {})) avg[Math.min(7, Number(k))] += v;
+  const top = Math.max(...curve, ...avg, 1);
+  const bars = el('div', 'bars');
+  curve.forEach((v, i) => {
+    const col = el('div');
+    col.title = `${v} cards at ${i}${i === 7 ? '+' : ''}` + (avg[i] ? `, EDHREC average ${avg[i]}` : '');
+    const bar = el('i'); bar.style.height = (v / top * 55) + 'px';
+    col.append(el('span', null, v || ''), bar, el('span', null, i === 7 ? '7+' : i));
+    if (avg[i]) { const m = el('b'); m.style.bottom = (avg[i] / top * 55 + 14) + 'px'; col.append(m); }
+    bars.append(col);
+  });
+  box.append(bars);
+
+  // counts against a common template (37 lands, 10 ramp, 10 draw, 8 removal, 3 wipes)
+  box.append(el('h4', null, 'Deck template'));
+  const lands = cards.filter(isLand).reduce((s, c) => s + n(c), 0);
+  const meter = (label, have, want, names) => {
+    const m = el('div', 'meter' + (have < want ? ' low' : ''));
+    m.title = names ? names.join('\n') : '';
+    const track = el('span', 'track'), fill = el('i');
+    fill.style.width = Math.min(100, have / want * 100) + '%';
+    track.append(fill);
+    m.append(el('span', null, label), track, el('span', null, `${have} / ${want}`));
+    box.append(m);
+  };
+  meter('Lands', lands, 37);
+  for (const [label, test, want] of ROLES) {
+    const hits = cards.filter(test);
+    meter(label, hits.reduce((s, c) => s + n(c), 0), want, hits.map(c => c.name));
+  }
+
+  // colored mana symbols in costs vs. lands that make each color
+  const ids = [...(deck.identity || '').toUpperCase()];
+  if (ids.length) {
+    box.append(el('h4', null, 'Colors: share of mana symbols / land sources'));
+    const pips = {}, sources = {};
+    for (const c of cards) {
+      if (isLand(c)) { for (const x of c.produced_mana || []) sources[x] = (sources[x] || 0) + n(c); continue; }
+      for (const [, sym] of (c.mana_cost || '').matchAll(/\{([^}]+)\}/g)) for (const x of ids) if (sym.includes(x)) pips[x] = (pips[x] || 0) + n(c);
+    }
+    const total = Object.values(pips).reduce((a, b) => a + b, 0) || 1;
+    for (const x of ids) {
+      const m = el('div', 'meter');
+      const track = el('span', 'track'), fill = el('i');
+      fill.style.width = (pips[x] || 0) / total * 100 + '%';
+      track.append(fill);
+      m.append(el('span', null, COLORS[x]), track, el('span', null, `${pct((pips[x] || 0) / total)} / ${sources[x] || 0}`));
+      m.title = `${pips[x] || 0} ${COLORS[x].toLowerCase()} symbols in mana costs, ${sources[x] || 0} lands that make ${COLORS[x].toLowerCase()}`;
+      box.append(m);
+    }
+  }
+
+  // Commander brackets: 1-2 allow no Game Changers, 3 allows up to three, 4+ any
+  const gc = all.filter(c => c.game_changer);
+  box.append(el('h4', null, `Game Changers: ${gc.length}`));
+  box.append(el('div', 'dim', (gc.length === 0 ? 'Fits brackets 1–2' : gc.length <= 3 ? 'Fits bracket 3' : 'Bracket 4+') + (gc.length ? ': ' + gc.map(c => c.name).join(', ') : '')));
+
+  const value = all.reduce((s, c) => s + (Number(c.usd) || 0) * (c.name === deck.commander ? 1 : n(c)), 0);
+  const missing = all.filter(c => !isOwned(c.name)).reduce((s, c) => s + (Number(c.usd) || 0) * n(c), 0);
+  box.append(el('h4', null, `Value: $${value.toFixed(0)}`), el('div', 'dim', `$${missing.toFixed(0)} of it in cards you don't own`));
+}
+$('statsbox').ontoggle = async () => { if ($('statsbox').open) { await lookup([deck.commander, ...deck.cards].filter(Boolean)); renderStats(); } };
+
+// ---------- EDHREC ----------
+
+function slug(name) {
+  return front(name).normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9 -]/g, '').trim().replace(/[\s-]+/g, '-');
 }
 
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+const pages = {};  // EDHREC page promises by path (the server caches them for a week)
+const edhPage = path => pages[path] ??= fetch('edhrec/' + path).then(r => r.ok ? r.json() : null).catch(() => null);
+const commanderPath = d => `commanders/${slug(d.commander)}${d.theme ? '/' + d.theme : ''}`;
+
+// {name: {syn, inc}} for a page, built once
+function statsOf(page) {
+  if (!page) return {};
+  if (!page.stats) {
+    page.stats = {};
+    for (const l of page.lists) for (const [name, syn, inc] of l.cards) {
+      page.stats[name] ??= { syn, inc };
+      page.stats[front(name)] ??= page.stats[name];
+    }
+  }
+  return page.stats;
+}
+const statFor = (stats, name) => stats[name] || stats[front(name)];
+const score = s => s ? s.inc + s.syn : 0;
+const describe = s => s ? `${s.syn >= 0 ? '+' : ''}${Math.round(s.syn * 100)}% syn · ${pct(s.inc)}` : 'not on EDHREC';
+
+async function loadEdh() {
+  const d = deck;
+  edh = {}; edhCards = []; edhPageNow = null;
+  if (!d.commander) return searchSoon();
+  $('status').textContent = 'loading EDHREC...';
+  const page = await edhPage(commanderPath(d));
+  if (d !== deck) return;
+  if (!page || page.missing) $('status').textContent = 'EDHREC has no page for this commander' + (d.theme ? ' and theme' : '');
+  edhPageNow = page; edh = statsOf(page);
+  edhCards = (await lookup(Object.keys(edh))).filter(Boolean);
+  edhCards = [...new Map(edhCards.map(c => [c.name, c])).values()];
+  $('allnames').replaceChildren(...[...new Set([...ownedCards, ...edhCards].map(c => c.name))].map(n => new Option(n)));
+  searchSoon(); renderStats();
+  if (currentView === 'tune') renderTune();
+}
+
+// ---------- search ----------
 
 // Owned cards are filtered locally from the bulk database. Fields that depend on the
 // printing (set, price, artist...) or that are not reimplemented here fall back to
@@ -379,7 +847,7 @@ const sorters = {
   cmc: (a, b) => a.cmc - b.cmc,
   edhrec: (a, b) => (a.edhrec_rank ?? 1e9) - (b.edhrec_rank ?? 1e9),
 };
-const edhStat = c => edh[c.name] || edh[c.name.split(' // ')[0]];
+const edhStat = c => statFor(edh, c.name);
 const bySynergy = () => ['syn', 'inc'].includes($('order').value);
 
 // Commander sorts put cards EDHREC lists for the commander first, highest first;
@@ -406,11 +874,11 @@ async function search() {
   $('full').textContent = q;
   let ownedList = [], otherList = [], total = 0;
   const draw = redraw = () => {
-    const notInDeck = c => c.name !== deck.commander && !deck.cards.includes(c.name);
+    const notInDeck = c => !inDeck(deck, c.name);
     const owned = sortCards(ownedList, local).filter(notInDeck);
     const other = sortCards(otherList, false).filter(notInDeck).slice(0, MAX_OTHER);
-    $('owned').replaceChildren(...owned.map(cardEl));
-    $('other').replaceChildren(...other.map(cardEl));
+    $('owned').replaceChildren(...owned.map(c => cardEl(c)));
+    $('other').replaceChildren(...other.map(c => cardEl(c)));
     $('nOwned').textContent = owned.length;
     $('nOther').textContent = other.length + (total - ownedList.length > MAX_OTHER ? ` of ${total - ownedList.length}` : '');
   };
@@ -449,65 +917,351 @@ let timer;
 const searchSoon = () => { clearTimeout(timer); timer = setTimeout(search, 400); };
 
 function cardEl(c) {
-  const d = document.createElement('div');
-  d.className = 'card' + (isOwned(c.name) ? ' owned' : '');
+  const d = el('div', 'card' + (isOwned(c.name) ? ' owned' : ''));
   d.innerHTML = `<img src="${big(small(c))}" loading="lazy">`;
   d.querySelector('img').title = `${c.name} (click to add)`;
-  d.onclick = () => addCard(c);
+  d.onclick = () => { addTo(deck, c); renderDeck(); };
   const s = edhStat(c);
   if (s) {
-    const b = document.createElement('span');
-    b.className = 'edh';
+    const b = el('span', 'edh', `${s.syn >= 0 ? '+' : ''}${Math.round(s.syn * 100)}% syn · ${pct(s.inc)}`);
     b.title = 'EDHREC: synergy with your commander, share of its decks running this card';
-    b.textContent = `${s.syn >= 0 ? '+' : ''}${Math.round(s.syn * 100)}% syn · ${Math.round(s.inc * 100)}%`;
     d.appendChild(b);
   }
-  if (/Legendary.*Creature|can be your commander/.test(c.type_line + (c.oracle_text || ''))) {
-    const b = document.createElement('button');
-    b.textContent = 'Set commander';
-    b.onclick = e => { e.stopPropagation(); setCommander(c); };
+  const users = decksWith(c.name).filter(x => x !== deck);
+  if (users.length) {
+    const b = el('span', 'where', `in ${users.length} deck${users.length > 1 ? 's' : ''}`);
+    b.title = users.map(x => x.name).join('\n') + (isOwned(c.name) ? `\nyou own ${ownedCount(c.name)}` : '');
     d.appendChild(b);
   }
+  const acts = el('div', 'acts'), act = (label, fn) => {
+    const b = el('button', null, label);
+    b.onclick = e => { e.stopPropagation(); fn(); };
+    acts.appendChild(b);
+  };
+  act('Maybe', () => { addMaybe(deck, c); renderDeck(); });
+  if (/Legendary.*Creature|can be your commander/.test(c.type_line + oracleOf(c))) act('Commander', () => { setCommanderOf(deck, c); renderDeck(); loadEdh(); });
+  d.appendChild(acts);
   return d;
 }
 
-function slug(name) {
-  return name.split(' // ')[0].normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .toLowerCase().replace(/[^a-z0-9 -]/g, '').trim().replace(/[\s-]+/g, '-');
+// ---------- fit check ----------
+
+// Creature types a deck is built around: shared by at least 8 cards and a third of its creatures.
+function tribesOf(d) {
+  const counts = {};
+  let creatures = 0;
+  for (const n of [d.commander, ...d.cards].filter(Boolean)) {
+    const t = d.info[n]?.type || '';
+    if (/Creature/.test(t)) creatures++;
+    for (const sub of new Set((t.split(' — ')[1] || '').split(/\s+|\/\//).filter(Boolean))) counts[sub] = (counts[sub] || 0) + 1;
+  }
+  return Object.keys(counts).filter(s => counts[s] >= Math.max(8, creatures / 3));
 }
 
-async function setCommander(c) {
-  deck.commander = c.name;
-  deck.identity = c.color_identity.join('').toLowerCase();
-  deck.cards = deck.cards.filter(n => n !== c.name);
-  remember(c);
-  save(); renderDeck();
-  await loadEdh();
+// Weakest card in a deck of the same broad type as `c` (any nonland card for nonland cards
+// without a same-type match), with its EDHREC score.
+function cutFor(d, stats, c) {
+  const want = typeOf(c.type_line), land = want === 'Land';
+  const pool = d.cards.filter(n => !d.info[n]?.any && (typeOf(d.info[n]?.type) === 'Land') === land);
+  const same = pool.filter(n => typeOf(d.info[n]?.type) === want);
+  const list = (same.length ? same : pool).map(n => ({ name: n, s: statFor(stats, n), score: score(statFor(stats, n)), cmc: d.info[n]?.cmc || 0 }));
+  list.sort((a, b) => a.score - b.score || b.cmc - a.cmc);
+  return list;
 }
 
-async function loadEdh() {
-  edh = {}; edhCards = [];
-  if (!deck.commander) return searchSoon();
-  $('status').textContent = 'loading EDHREC...';
-  const r = await fetch('edhrec/' + slug(deck.commander));
-  if (!r.ok) { $('status').textContent = 'EDHREC lookup failed'; return; }
-  for (const list of (await r.json()).container.json_dict.cardlists)
-    for (const c of list.cardviews) edh[c.name] = { syn: c.synergy || 0, inc: c.num_decks / c.potential_decks };
-  edhCards = await (await fetch('cards.json', { method: 'POST', body: JSON.stringify(Object.keys(edh)) })).json();
-  searchSoon();
+let fitGen = 0;
+
+async function runFit(input, label) {
+  const my = ++fitGen;
+  const status = t => { if (my === fitGen) $('fitstatus').textContent = t; };
+  $('fitout').innerHTML = '';
+  status('looking up cards...');
+  let cards = Array.isArray(input) ? (await lookup(input)).filter(Boolean) : await input(status);
+  cards = [...new Map(cards.map(c => [c.name, c])).values()];
+  const withCmd = Object.values(decks).filter(d => d.commander);
+  if (!withCmd.length) return status('None of your decks has a commander yet.');
+  // types for cards in decks that haven't been opened since card info was stored
+  const noInfo = withCmd.flatMap(d => [d.commander, ...d.cards].filter(n => !d.info[n]?.type).map(n => [d, n]));
+  if (noInfo.length) {
+    await lookup(noInfo.map(x => x[1]));
+    for (const [d, n] of noInfo) if (cardData[n]) remember(d, cardData[n]);
+    new Set(noInfo.map(x => x[0])).forEach(d => save(d));
+  }
+  status(`loading EDHREC for ${withCmd.length} decks...`);
+  const deckPages = await Promise.all(withCmd.map(d => edhPage(commanderPath(d))));
+  // EDHREC's top commanders for each card; skipped for big lists to go easy on EDHREC
+  const tops = {};
+  if (cards.length <= 60) {
+    status('loading EDHREC card pages...');
+    let done = 0;
+    await pool(cards, 4, async c => {
+      const p = await edhPage('cards/' + slug(c.name));
+      tops[c.name] = new Set((p?.lists.find(l => l.header === 'Top Commanders')?.cards || []).map(x => x[0]));
+      status(`loading EDHREC card pages... ${++done}/${cards.length}`);
+    });
+  }
+  if (my !== fitGen) return;
+  const info = withCmd.map((d, i) => ({ d, stats: statsOf(deckPages[i]), tribes: tribesOf(d) }));
+  const rows = cards.map(c => {
+    const sub = (c.type_line.split(' — ')[1] || '').split(/\s+/);
+    const text = lower(oracleOf(c));
+    const fits = [];
+    for (const { d, stats, tribes } of info) {
+      if (!c.color_identity.every(x => d.identity.includes(x.toLowerCase()))) continue;
+      const s = statFor(stats, c.name), top = tops[c.name]?.has(d.commander);
+      const tribe = tribes.find(t => sub.includes(t) || new RegExp(`\\b${t.toLowerCase()}s?\\b`).test(text));
+      const sc = score(s) + (top ? 0.3 : 0) + (tribe ? 0.25 : 0);
+      fits.push({ d, stats, s, top, tribe, score: sc, signal: !!(s || top || tribe), has: inDeck(d, c.name) });
+    }
+    fits.sort((a, b) => b.score - a.score);
+    return { c, fits, best: fits.find(f => f.signal && !f.has)?.score ?? -1 };
+  });
+  rows.sort((a, b) => b.best - a.best || isOwned(b.c.name) - isOwned(a.c.name));
+  fitRows = rows; fitLabel = label;
+  renderFit();
 }
+
+let fitRows = [], fitLabel = '';
+function renderFit() {
+  const all = $('fitall').checked, ownedOnly = $('fitowned').checked;
+  const rows = fitRows.filter(r => (all || r.fits.some(f => f.signal)) && (!ownedOnly || isOwned(r.c.name)));
+  $('fitstatus').textContent = `${fitLabel}: ${fitRows.length} cards, ${fitRows.filter(r => r.fits.some(f => f.signal)).length} with a match in your decks` + (rows.length > 200 ? ' (showing 200)' : '');
+  $('fitout').replaceChildren(...rows.slice(0, 200).map(fitRow));
+}
+$('fitall').onchange = $('fitowned').onchange = renderFit;
+
+function fitRow({ c, fits }) {
+  const row = el('div', 'fit');
+  const img = el('img');
+  img.src = small(c) || ''; img.loading = 'lazy';
+  preview(img, small(c));
+  const body = el('div');
+  const title = el('div', 'title', c.name);
+  if (isOwned(c.name)) title.append(el('span', 'tag own', `owned ×${ownedCount(c.name)}`));
+  const users = decksWith(c.name);
+  if (users.length) title.append(el('span', 'tag', 'in ' + users.map(d => d.name).join(', ')));
+  body.append(title, el('div', 'dim', c.type_line));
+  const chips = el('div', 'chips');
+  const shown = fits.filter(f => f.signal || $('fitall').checked);
+  if (!shown.length) body.append(el('div', 'dim', fits.length ? `On color for ${fits.length} decks, no EDHREC or creature type match` : 'Off color for all your decks'));
+  shown.forEach((f, i) => chips.append(fitChip(c, f, i === 0 && !f.has)));
+  body.append(chips);
+  row.append(img, body);
+  return row;
+}
+
+function fitChip(c, f, best) {
+  const { d, s } = f;
+  const chip = el('div', 'chip' + (best ? ' best' : ''));
+  chip.append(el('div', 'd', d.name));
+  const why = [];
+  if (s) why.push(`${s.syn >= 0 ? '+' : ''}${Math.round(s.syn * 100)}% synergy, in ${pct(s.inc)} of decks`);
+  if (f.top) why.push(`a top commander for this card`);
+  if (f.tribe) why.push(`${f.tribe} deck`);
+  chip.append(el('div', 'why', why.join(' · ') || 'on color'));
+  const acts = el('div', 'acts');
+  if (f.has) { acts.append(el('span', 'tag', 'already in deck')); chip.append(acts); return chip; }
+  const done = t => { acts.replaceChildren(el('span', 'tag', t)); if (d === deck) renderDeck(); };
+  const btn = (label, fn) => { const b = el('button', null, label); b.onclick = fn; acts.append(b); return b; };
+  btn('Add', () => { addTo(d, c); done('added'); });
+  const cuts = cutFor(d, f.stats, c);
+  if (cuts.length) {
+    const sel = el('select');
+    for (const x of cuts.slice(0, 15)) sel.add(new Option(`${x.name} (${describe(x.s)})`, x.name));
+    btn('Swap for', () => { removeFrom(d, sel.value); addTo(d, c); done(`swapped for ${sel.value}`); });
+    acts.append(sel);
+  }
+  btn('Maybe', () => { addMaybe(d, c); done('on maybeboard'); });
+  chip.append(acts);
+  return chip;
+}
+
+async function pool(items, n, fn) {
+  const queue = [...items];
+  await Promise.all(Array.from({ length: n }, async () => { while (queue.length) await fn(queue.shift()); }));
+}
+
+$('fitgo').onclick = () => {
+  const names = parseList($('fitnames').value).map(r => r.name);
+  if (names.length) runFit(names, 'pasted cards');
+};
+$('fitnew').onclick = async () => {
+  const a = await (await fetch('additions.json')).json();
+  const names = Object.keys(a.cards || {});
+  if (!names.length) return ($('fitstatus').textContent = a.date ? `No new cards in the upload on ${a.date}` : 'Upload a new Cards.txt to see what was added since the previous one.');
+  runFit(names, `added on ${a.date}`);
+};
+$('setgo').onclick = () => {
+  const code = $('fitset').value.trim().toLowerCase();
+  if (!code) return;
+  runFit(async status => {
+    const out = [];
+    let url = 'https://api.scryfall.com/cards/search?' + new URLSearchParams({ q: `e:${code} -t:basic`, unique: 'cards' });
+    while (url) {
+      status(`loading set ${code}... ${out.length}`);
+      const r = await (await fetch(url)).json();
+      if (r.object === 'error') { status(r.details); return []; }
+      out.push(...r.data);
+      url = r.has_more ? r.next_page : null;
+      if (url) await sleep(500);
+    }
+    return out;
+  }, `set ${code.toUpperCase()}`);
+};
+
+// ---------- tune ----------
+
+async function renderTune() {
+  const d = deck;
+  $('tunetitle').textContent = d.name;
+  if (!d.commander) { $('tunestatus').textContent = 'Set a commander to get suggestions.'; $('cuts').innerHTML = $('upgrades').innerHTML = $('avg').innerHTML = ''; return; }
+  $('tunestatus').textContent = '';
+  const base = await edhPage(`commanders/${slug(d.commander)}`);
+  if (d !== deck) return;
+  $('theme').replaceChildren(new Option('all decks', ''), ...(base?.themes || []).map(t => new Option(`${t.value} (${t.count})`, t.slug)));
+  $('theme').value = d.theme;
+
+  const cuts = d.cards.filter(n => !d.info[n]?.any).map(n => ({ n, s: statFor(edh, n) }))
+    .sort((a, b) => score(a.s) - score(b.s) || (d.info[b.n]?.cmc || 0) - (d.info[a.n]?.cmc || 0)).slice(0, 15);
+  $('cuts').replaceChildren(...cuts.map(({ n, s }) => {
+    const li = deckRow(n, { buttons: [['↓', 'Move to maybeboard', () => { removeFrom(d, n); d.maybe.push(n); save(d); renderDeck(); }], ['×', 'Remove', () => { removeFrom(d, n); renderDeck(); }, 'del']] });
+    li.insertBefore(el('span', 'dim', describe(s)), li.querySelector('.x'));
+    return li;
+  }));
+
+  const ups = edhCards.filter(c => isOwned(c.name) && !inDeck(d, c.name)).sort((a, b) => score(edhStat(b)) - score(edhStat(a))).slice(0, 40);
+  $('upgrades').replaceChildren(...ups.map(c => cardEl(c)));
+  if (!ups.length) $('upgrades').append(el('div', 'dim', edhCards.length ? 'Every EDHREC card you own is already in the deck.' : 'No EDHREC data for this commander.'));
+
+  const avgPage = await edhPage(`average-decks/${slug(d.commander)}${d.theme ? '/' + d.theme : ''}`);
+  if (d !== deck) return;
+  const box = $('avg');
+  box.innerHTML = '';
+  if (!avgPage?.deck?.length) { box.append(el('div', 'dim', 'EDHREC has no average deck here.')); return; }
+  const avgNames = avgPage.deck.map(x => x[0]).filter(n => n !== d.commander && !/^(Plains|Island|Swamp|Mountain|Forest|Wastes)$/.test(n));
+  const missing = avgNames.filter(n => !inDeck(d, n) && !inDeck(d, front(n)));
+  const extra = d.cards.filter(n => !d.info[n]?.any && !avgNames.includes(n) && !avgNames.some(a => front(a) === n));
+  const missingCards = (await lookup(missing)).filter(Boolean);
+  if (d !== deck) return;
+  const mOwned = missingCards.filter(c => isOwned(c.name)), mOther = missingCards.filter(c => !isOwned(c.name));
+  box.append(el('h4', null, `In the average deck, not yours: ${mOwned.length} owned`));
+  const g = el('div', 'results'); g.append(...mOwned.map(c => cardEl(c))); box.append(g);
+  box.append(el('h4', null, `…and ${mOther.length} you don't own`));
+  const g2 = el('div', 'results'); g2.append(...mOther.map(c => cardEl(c))); box.append(g2);
+  box.append(el('h4', null, `Only in yours (${extra.length})`), el('div', 'dim', extra.join(' · ')));
+}
+$('theme').onchange = () => { deck.theme = $('theme').value; save(); loadEdh(); };
+
+// ---------- collection ----------
+
+function shoppingNeeds() {
+  const need = {};
+  for (const d of Object.values(decks)) for (const n of [d.commander, ...d.cards].filter(Boolean)) {
+    if (d.info[n]?.any) continue;
+    const e = need[n] ??= { name: n, decks: [], used: 0 };
+    e.decks.push(d.name); e.used += d.commander === n ? 1 : qty(d, n);
+  }
+  return Object.values(need);
+}
+
+let prices = {};
+async function renderShop(fetchPrices) {
+  const list = shoppingNeeds().filter(e => !isOwned(e.name));
+  if (fetchPrices) {
+    const want = list.map(e => e.name);
+    for (let i = 0; i < want.length; i += 75) {
+      $('shopstatus').textContent = `loading prices ${i}/${want.length}...`;
+      const r = await (await fetch('https://api.scryfall.com/cards/collection', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifiers: want.slice(i, i + 75).map(name => ({ name: front(name) })) }) })).json();
+      for (const c of r.data || []) prices[c.name] = prices[front(c.name)] = Number(c.prices.usd || c.prices.usd_foil) || 0;
+      await sleep(100);
+    }
+    $('shopstatus').textContent = '';
+  }
+  for (const e of list) e.usd = prices[e.name] ?? (Number(cardData[e.name]?.usd) || 0);
+  list.sort((a, b) => (b.usd || 0) - (a.usd || 0));
+  const total = list.reduce((s, e) => s + (e.usd || 0) * e.used, 0);
+  const t = el('table');
+  t.innerHTML = `<tr><th>Card</th><th class="num">Copies</th><th>Decks</th><th class="num">Price</th></tr>`;
+  for (const e of list) {
+    const tr = el('tr');
+    tr.append(el('td', null, e.name), el('td', 'num', e.used), el('td', 'dim', e.decks.join(', ')), el('td', 'num', e.usd ? `$${e.usd.toFixed(2)}` : '–'));
+    preview(tr, cardData[e.name] && small(cardData[e.name]));
+    t.append(tr);
+  }
+  $('shop').replaceChildren(list.length ? t : el('div', 'dim', 'You own every card in your decks.'), el('h4', null, `${list.length} cards, about $${total.toFixed(2)}`));
+
+  const short = shoppingNeeds().filter(e => isOwned(e.name) && e.used > ownedCount(e.name));
+  const t2 = el('table');
+  t2.innerHTML = `<tr><th>Card</th><th class="num">Owned</th><th class="num">Used</th><th>Decks</th></tr>`;
+  for (const e of short) { const tr = el('tr'); tr.append(el('td', null, e.name), el('td', 'num', ownedCount(e.name)), el('td', 'num', e.used), el('td', 'dim', e.decks.join(', '))); t2.append(tr); }
+  $('short').replaceChildren(short.length ? t2 : el('div', 'dim', 'You have enough copies for every deck.'));
+}
+$('shopgo').onclick = () => renderShop(true);
+$('shopcopy').onclick = () => navigator.clipboard.writeText(shoppingNeeds().filter(e => !isOwned(e.name)).map(e => `${e.used} ${e.name}`).join('\n'));
+
+$('scango').onclick = async () => {
+  const cmds = ownedCards.filter(c => c.commander && !c.hidden);
+  const results = [];
+  let done = 0;
+  $('scango').disabled = true;
+  await pool(cmds, 3, async c => {
+    const p = await edhPage(`commanders/${slug(c.name)}`);
+    $('scanstatus').textContent = `scanning ${++done}/${cmds.length}...`;
+    const stats = statsOf(p);
+    let have = 0, all = 0, n = 0, total = 0;
+    for (const [name, s] of Object.entries(stats)) {
+      if (name.includes(' // ') && stats[front(name)] === s) continue;  // counted under the front name too
+      if (/^(Plains|Island|Swamp|Mountain|Forest)$/.test(name)) continue;
+      all += s.inc; total++;
+      if (isOwned(name)) { have += s.inc; n++; }
+    }
+    if (total) results.push({ c, cover: have / all, n, total });
+  });
+  $('scango').disabled = false;
+  $('scanstatus').textContent = `${results.length} commanders with EDHREC pages`;
+  results.sort((a, b) => b.cover - a.cover);
+  const t = el('table');
+  t.innerHTML = `<tr><th>Commander</th><th class="num">Coverage</th><th class="num">EDHREC cards owned</th><th>Your decks</th><th></th></tr>`;
+  for (const { c, cover, n, total } of results.slice(0, 40)) {
+    const tr = el('tr'), td = el('td'), row = el('div', 'cmdrow'), img = el('img');
+    img.src = small(c) || ''; preview(img, small(c));
+    row.append(img, el('span', null, c.name)); td.append(row);
+    const b = el('button', null, 'New deck');
+    b.onclick = () => { const name = uniqueName(front(c.name)); decks[name] = emptyDeck(name); setCommanderOf(decks[name], c); openDeck(name); showView('tune'); };
+    const act = el('td'); act.append(b);
+    tr.append(td, el('td', 'num', pct(cover)), el('td', 'num', `${n} / ${total}`), el('td', 'dim', decksWith(c.name).map(d => d.name).join(', ')), act);
+    t.append(tr);
+  }
+  $('scan').replaceChildren(t);
+};
+
+// ---------- views ----------
+
+let currentView = 'search';
+function showView(v) {
+  currentView = v;
+  localStorage.setItem('view', v);
+  for (const b of document.querySelectorAll('#tabs button')) b.classList.toggle('on', b.dataset.view === v);
+  for (const s of document.querySelectorAll('.view')) s.classList.toggle('on', s.id === 'v-' + v);
+  if (v === 'tune' && deck) renderTune();
+  if (v === 'coll' && deck) renderShop(false);
+  if (v === 'fit' && fitRows.length) renderFit();
+}
+for (const b of document.querySelectorAll('#tabs button')) b.onclick = () => showView(b.dataset.view);
 
 $('form').oninput = $('querybar').oninput = searchSoon;
 $('dgroup').onchange = $('dsort').onchange = () => { localStorage.setItem('deckView', $('dgroup').value + ' ' + $('dsort').value); renderDeck(); };
 [$('dgroup').value, $('dsort').value] = (localStorage.getItem('deckView') || 'type cmc').split(' ');
 $('export').onclick = () => {
-  const lines = (deck.commander ? [`1 ${deck.commander}`] : []).concat(deck.cards.sort().map(n => `1 ${n}`));
+  const lines = (deck.commander ? [`1 ${deck.commander}`] : []).concat([...deck.cards].sort().map(n => `${qty(deck, n)} ${n}`));
   navigator.clipboard.writeText(lines.join('\n'));
 };
 
 fetch('https://api.scryfall.com/sets').then(r => r.json()).then(r => {
   for (const x of r.data) { const o = document.createElement('option'); o.value = x.code; o.label = x.name; $('sets').appendChild(o); }
 });
+showView(localStorage.getItem('view') || 'search');
 loadCollection().then(loadDecks);
 </script>
 </body>
