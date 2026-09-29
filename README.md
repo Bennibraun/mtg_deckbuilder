@@ -1,17 +1,18 @@
-# cloud_testing
+# mtg_deckbuilder
+
 ## Deckbuilder hosting (Docker Compose + nginx)
 
 Serves `deckbuilder/` on `127.0.0.1:8000` behind nginx. `Cards.txt` and `cards-db.json` live in the mounted folder and are gitignored, so pulls never touch them.
 
 1. Clone and add your collection:
    ```bash
-   git clone https://github.com/Bennibraun/cloud_testing.git ~/cloud_testing
-   cp /path/to/Cards.txt ~/cloud_testing/deckbuilder/
+   git clone https://github.com/Bennibraun/mtg_deckbuilder.git ~/mtg_deckbuilder
+   cp /path/to/Cards.txt ~/mtg_deckbuilder/deckbuilder/
    ```
 2. Start on boot:
    ```bash
    sudo systemctl enable docker
-   cd ~/cloud_testing/deckbuilder && docker compose up -d
+   cd ~/mtg_deckbuilder/deckbuilder && docker compose up -d
    docker compose logs -f   # first start downloads the card database
    ```
 3. nginx site at `/etc/nginx/sites-available/deckbuilder`:
@@ -31,7 +32,7 @@ Serves `deckbuilder/` on `127.0.0.1:8000` behind nginx. `Cards.txt` and `cards-d
    ```
 4. Auto-update every 15 minutes (`sudo crontab -e`, replace `/home/you`):
    ```
-   */15 * * * * cd /home/you/cloud_testing && git fetch -q && [ "$(git rev-parse HEAD)" != "$(git rev-parse @{u})" ] && git pull -q && docker restart deckbuilder
+   */15 * * * * cd /home/you/mtg_deckbuilder && git fetch -q && [ "$(git rev-parse HEAD)" != "$(git rev-parse @{u})" ] && git pull -q && docker restart deckbuilder
    ```
    If git refuses with "dubious ownership", put the line in your own crontab instead and add yourself to the docker group (`sudo usermod -aG docker you`, then log in again).
 
