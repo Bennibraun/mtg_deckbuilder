@@ -47,9 +47,9 @@ const today = new Date().toISOString().slice(0, 10);
 
   await step('import a deck', async () => {
     await p.click('#impdeck');
-    await p.fill('#imptext', `Commander\n1 Gishath, Sun's Avatar (LCI) 229\n\nDeck\n1 Sol Ring\n1x Arcane Signet (CMM) 1 *F*\n12 Forest\n1 Basalt Monolith\n1 Regisaur Alpha\n1 Etali, Primal Conqueror\n1 Cultivate\n1 Kodama's Reach\n1 Beast Within\n1 Evolving Wilds\n1 Not A Real Card\n\nSideboard\n1 Zacama, Primal Calamity`);
+    await p.fill('#imptext', `Commander\n1 Gishath, Sun's Avatar (LCI) 229\n\nDeck\n1 Sol Ring\n1x Arcane Signet (CMM) 1 *F*\n12 Forest\n1 Basalt Monolith\n1 Regisaur Alpha\n1 Etali, Primal Conqueror\n1 Cultivate\n1 Kodama's Reach\n1 Beast Within\n1 Evolving Wilds\n1 Soul Warden\n1 Daxos, Blessed by the Sun\n1 Heliod, Sun-Crowned\n1 Not A Real Card\n\nSideboard\n1 Zacama, Primal Calamity`);
     await p.click('#impdlg button[value=ok]');
-    await until(async () => (await text('#count')) === '22', async () => `deck count 22, have ${await text('#count')}: ${await text('#deck')}`);
+    await until(async () => (await text('#count')) === '25', async () => `deck count 25, have ${await text('#count')}: ${await text('#deck')}`);
     assert.match(await text('#maybebox'), /Zacama/);
   });
 
@@ -60,16 +60,20 @@ const today = new Date().toISOString().slice(0, 10);
     await p.selectOption('#dgroup', 'strategy');
     await until(async () => /Ramp\d/.test(await text('#deck')), 'strategy groups');
     await p.selectOption('#dgroup', 'type');
+    await until(async () => /Top strategies[\s\S]*Lifegain/.test(await text('#stats')), 'lifegain among top strategies');
+    await p.click('#stats .theme a:text-is("Lifegain")');
+    await until(async () => /otag:lifegain/.test(await text('#full')), 'strategy search');
+    await p.click('#tabs button[data-view=search]');
     await until(async () => /two-card combos \d/.test(await text('#stats')), 'combo count');
   });
 
   await step('quick add, undo', async () => {
     await p.fill('#quick', 'swords to plowshares');
     await p.press('#quick', 'Enter');
-    await until(async () => (await text('#count')) === '23', 'added');
+    await until(async () => (await text('#count')) === '26', 'added');
     await p.click('#histbox summary');
     await p.click('#undo');
-    await until(async () => (await text('#count')) === '22', 'undone');
+    await until(async () => (await text('#count')) === '25', 'undone');
   });
 
   await step('copy unowned', async () => {

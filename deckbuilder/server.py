@@ -18,8 +18,8 @@ import urllib.request
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 HERE = pathlib.Path(__file__).parent
-DB = HERE / "cards-db-v4.json"  # bump the name when slim() gains fields to force a fresh download
-OLD_DBS = ["cards-db.json", "cards-db-v2.json", "cards-db-v3.json"]
+DB = HERE / "cards-db-v5.json"  # bump the name when slim() gains fields to force a fresh download
+OLD_DBS = ["cards-db.json", "cards-db-v2.json", "cards-db-v3.json", "cards-db-v4.json"]
 DECKS = HERE / "decks.json"
 COLLECTION = HERE / "Cards.txt"
 ADDITIONS = HERE / "additions.json"
@@ -32,13 +32,32 @@ HEADERS = {"User-Agent": "deckbuilder/1.0", "Accept": "application/json"}
 # Scryfall Tagger oracle tags (curated by hand, child tags included), from their bulk file:
 # roles drive the deck template, playtest odds and cut suggestions; strategies group the deck list.
 ROLE_TAGS = {"ramp": "ramp", "draw": "draw", "removal": "spot-removal", "wipe": "sweeper", "tutor": "tutor"}
-STRATEGIES = {
+# label -> tag slug(s). Staples are what most decks run; themes are what a deck is built around.
+STAPLES = {
     "Ramp": "ramp", "Card draw": "draw", "Removal": "removal", "Board wipe": "sweeper",
-    "Counterspell": "counterspell", "Tutor": "tutor", "Recursion": "recursion", "Protection": "protection",
-    "Lifegain": "lifegain", "Lifegain payoff": "lifegain-matters", "Tokens": "repeatable-token-generator",
-    "Sacrifice outlet": "sacrifice-outlet", "Burn": "burn", "Mill": "mill", "Discard": "discard",
-    "Flicker": "flicker", "Anthem": "anthem", "Copy": "copy", "Landfall": "landfall", "Extra turn": "extra-turn",
+    "Counterspell": "counterspell", "Tutor": "tutor", "Protection": "protection", "Recursion": "recursion",
 }
+THEMES = {
+    "Lifegain": "lifegain", "Lifegain payoff": "lifegain-matters", "Drain": "drain-life",
+    "Landfall & lands": "lands-matter", "Extra land drops": "extra-land",
+    "+1/+1 counters": "gives-pp-counters", "Counters matter": "counters-matter",
+    "Tokens": "repeatable-token-generator", "Token payoff": "synergy-token", "Treasure": "repeatable-treasures",
+    "Sacrifice outlet": "sacrifice-outlet", "Death triggers": "death-trigger",
+    "Reanimation": "reanimate", "Self-mill": "mill-self", "Graveyard payoff": "cards-in-graveyard-matter",
+    "Cast from graveyard": "castable-from-graveyard", "Mill": "mill",
+    "Spellslinger": ["synergy-instant", "synergy-sorcery", "synergy-noncreature"], "Spell copy": "copy-spell",
+    "Artifacts matter": "synergy-artifact", "Enchantments matter": "synergy-enchantment",
+    "Equipment": ["synergy-equipment", "quick-equip"], "Auras": "synergy-aura", "Vehicles": "synergy-vehicle",
+    "Legends matter": "synergy-legendary", "Flicker": "flicker", "Copy & clones": "copy",
+    "Anthem": "anthem", "Evasion": "gives-evasion", "Haste": "gives-haste", "Extra combat": "extra-combat-phase",
+    "Attack triggers": "attack-trigger", "Loot & discard": ["loot", "rummage", "discard-outlet"],
+    "Discard payoff": "discard-matters", "Wheels": "wheel", "Impulse draw": "impulse",
+    "Cost reduction": "cost-reducer", "Untap": "untapper", "Theft": "theft", "Bounce": "bounce",
+    "Burn": "burn", "Group slug": "group-slug", "Group hug": "group-hug", "Tax": "tax", "Fog": "fog",
+    "Extra turns": "extra-turn", "Poison": "poison-mechanics", "Energy": "energy-generator",
+    "Typal": "typal", "Trigger doubling": "trigger-doubler",
+}
+STRATEGIES = {**STAPLES, **THEMES}
 db, db_mtime, db_lock = [], 0, threading.Lock()
 
 
@@ -88,11 +107,32 @@ def oracle_tags(*mappings):
     out = []
     for mapping in mappings:
         index = {}
-        for label, slug in mapping.items():
-            for oid in oracle_ids(by_slug[slug], set()) if slug in by_slug else ():
+        for label, slugs in mapping.items():
+            ids = set().union(*(oracle_ids(by_slug[s], set()) for s in ([slugs] if isinstance(slugs, str) else slugs) if s in by_slug))
+            for oid in ids:
                 index.setdefault(oid, []).append(label)
         out.append(index)
     return out
+
+
+strategies_cache = [None, None]  # [db_mtime, body]
+
+
+def strategies_json():
+    """Each strategy's kind, Scryfall query and share of Commander-legal cards that have it."""
+    load_db()
+    if strategies_cache[0] != db_mtime:
+        pool = [c for c in db if not c["hidden"] and c["legalities"].get("commander") == "legal" and "Land" not in c["type_line"]]
+        counts = {}
+        for c in pool:
+            for t in c["tags"]:
+                counts[t] = counts.get(t, 0) + 1
+        slugs = lambda v: [v] if isinstance(v, str) else v
+        body = {label: {"kind": "staple" if label in STAPLES else "theme",
+                        "query": " or ".join(f"otag:{x}" for x in slugs(v)),
+                        "rate": counts.get(label, 0) / len(pool)} for label, v in STRATEGIES.items()}
+        strategies_cache[:] = [db_mtime, json.dumps(body).encode()]
+    return strategies_cache[1]
 
 
 def slim(c, commanders, roles, strategies):
@@ -288,6 +328,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self.send(200, ADDITIONS.read_bytes() if ADDITIONS.exists() else b"{}")
         if self.path == "/state.json":
             return self.send(200, STATE.read_bytes() if STATE.exists() else b"{}")
+        if self.path == "/strategies.json":
+            return self.send(200, strategies_json())
         if self.path == "/commanders.json":  # names Scryfall's is:commander matches
             load_db()
             return self.send(200, json.dumps([c["name"] for c in db if c["commander"]]).encode())

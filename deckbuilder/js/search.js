@@ -149,6 +149,14 @@ async function search() {
   $('status').textContent = `${total} matches` + (local ? ' (owned: local database)' : url ? ` (scanned first ${MAX_PAGES} pages for owned cards, refine query)` : ' (owned: scanned Scryfall pages)');
 }
 
+// Search view for cards with a strategy's Scryfall tags, within the deck's colors
+function findStrategy(query) {
+  for (const id of ['name', 'oracle', 'type']) $(id).value = '';
+  $('q').value = `(${query})`;
+  $('inId').checked = true;
+  showView('search'); searchSoon();
+}
+
 let timer;
 const searchSoon = () => { clearTimeout(timer); timer = setTimeout(search, 400); };
 

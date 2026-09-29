@@ -84,6 +84,10 @@ li .x.del:hover { color: var(--bad); }
 .meter .track { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
 .meter .track i { display: block; height: 100%; background: var(--own); }
 .meter.low .track i { background: var(--warn); }
+.meter.theme { grid-template-columns: 110px 1fr 64px; }
+.meter.theme a { color: var(--text); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meter.theme a:hover { color: var(--accent); }
+.meter.theme .track i { background: var(--accent); }
 .log { font-size: 12px; margin: 4px 0; }
 .log .add { color: var(--own); }
 .log .rem { color: var(--bad); }

@@ -9,7 +9,7 @@ tmp=$(mktemp -d)
 pid=
 trap '[ -n "$pid" ] && kill $pid 2>/dev/null; rm -rf "$tmp"' EXIT
 cp -r "$app"/{index.html,style.css,server.py,js} "$here/fixtures/Cards.txt" "$tmp"/
-[ -e "$app/cards-db-v4.json" ] && ln -s "$app/cards-db-v4.json" "$tmp"/
+[ -e "$app/cards-db-v5.json" ] && ln -s "$app/cards-db-v5.json" "$tmp"/
 [ -d "$app/edhrec-cache" ] && cp -r "$app/edhrec-cache" "$tmp"/
 python3 "$tmp/server.py" 8765 > "$tmp/server.log" 2>&1 &
 pid=$!

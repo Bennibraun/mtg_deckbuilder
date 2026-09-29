@@ -173,7 +173,7 @@ async function fillDeckInfo() {
   const d = deck;
   const names = [...cmdrs(d), ...d.cards, ...d.maybe];
   await lookup(names);
-  const missing = names.filter(n => d.info[n]?.tags === undefined && cardData[n]?.tags);
+  const missing = names.filter(n => cardData[n]?.tags && String(d.info[n]?.tags) !== String(cardData[n].tags));  // new or retagged
   missing.forEach(n => remember(d, cardData[n]));
   refreshIdentity(d);
   if (missing.length) save(d);
@@ -262,6 +262,29 @@ function renderStats() {
   for (const [label, role, want] of ROLES) {
     const hits = cards.filter(c => hasRole(c, role));
     meter(label, hits.reduce((s, c) => s + n(c), 0), want, hits.map(c => c.name));
+  }
+
+  // Themes the deck leans into, ranked by how many more cards it has for each than a typical
+  // Commander deck with this many nonland cards would. Click one to search for more.
+  const nonland = all.filter(c => !isLand(c)), size = nonland.reduce((s, c) => s + n(c), 0);
+  const themes = Object.entries(strategies).filter(([, s]) => s.kind === 'theme').map(([label, s]) => {
+    const hits = nonland.filter(c => (c.tags || []).includes(label));
+    const count = hits.reduce((t, c) => t + n(c), 0), expected = size * s.rate;
+    return { label, s, hits, count, expected, excess: count - expected };
+  }).filter(t => t.count >= 3 && t.excess > 1).sort((a, b) => b.excess - a.excess).slice(0, 10);
+  if (themes.length) {
+    box.append(el('h4', null, 'Top strategies'));
+    const most = Math.max(...themes.map(t => t.count));
+    for (const t of themes) {
+      const row = el('div', 'meter theme'), track = el('span', 'track'), fill = el('i'), label = el('a', null, t.label);
+      fill.style.width = t.count / most * 100 + '%';
+      track.append(fill);
+      label.href = '#';
+      label.onclick = e => { e.preventDefault(); findStrategy(t.s.query); };
+      row.title = `${t.count} cards, a typical deck has ${t.expected.toFixed(1)}. Click to find more.\n\n` + t.hits.map(c => c.name).join('\n');
+      row.append(label, track, el('span', null, `${t.count} · ${(t.count / Math.max(t.expected, 0.1)).toFixed(1)}×`));
+      box.append(row);
+    }
   }
 
   // colored mana symbols in costs vs. lands that make each color

@@ -15,3 +15,6 @@
 1 Wilson, Refined Grizzly (CLB) 261
 1 Pantlaza, Sun-Favored (LCC) 1
 Command Tower
+1 Soul Warden
+1 Daxos, Blessed by the Sun
+1 Heliod, Sun-Crowned
