@@ -15,6 +15,8 @@ import urllib.request
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 HERE = pathlib.Path(__file__).parent
 DB = HERE / "cards-db.json"
+DECKS = HERE / "decks.json"
+decks_lock = threading.Lock()
 MAX_AGE = 7 * 86400
 HEADERS = {"User-Agent": "deckbuilder/1.0", "Accept": "application/json"}
 db, db_mtime, db_lock = [], 0, threading.Lock()
@@ -99,6 +101,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/owned.json":
             return self.send(200, json.dumps(owned_cards()).encode())
+        if self.path == "/decks.json":
+            return self.send(200, DECKS.read_bytes() if DECKS.exists() else b"{}")
         m = re.fullmatch(r"/edhrec/([a-z0-9-]+)", self.path)
         if not m:
             return super().do_GET()
@@ -121,6 +125,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             names = set(json.loads(body))
             found = [c for c in db if c["name"] in names or c["name"].split(" // ")[0] in names]
             return self.send(200, json.dumps(found).encode())
+        if self.path == "/decks.json":  # {"name": ..., "deck": {...}} saves one deck, "deck": null deletes it
+            req = json.loads(body)
+            with decks_lock:
+                decks = json.loads(DECKS.read_text()) if DECKS.exists() else {}
+                if req["deck"] is None:
+                    decks.pop(req["name"], None)
+                else:
+                    decks[req["name"]] = req["deck"]
+                tmp = DECKS.with_suffix(".tmp")
+                tmp.write_text(json.dumps(decks))
+                tmp.replace(DECKS)
+            return self.send(200, b"{}")
         self.send(404, b"{}")
 
     def send(self, code, body):

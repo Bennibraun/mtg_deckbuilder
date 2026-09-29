@@ -2,7 +2,7 @@
 
 ## Deckbuilder hosting (Docker Compose + nginx)
 
-Serves `deckbuilder/` on `127.0.0.1:8000` behind nginx. `Cards.txt` and `cards-db.json` live in the mounted folder and are gitignored, so pulls never touch them.
+Serves `deckbuilder/` on `127.0.0.1:8000` behind nginx. `Cards.txt`, `decks.json` and `cards-db.json` live in the mounted folder and are gitignored, so pulls never touch them.
 
 1. Clone and add your collection:
    ```bash
