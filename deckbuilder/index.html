@@ -301,7 +301,7 @@ function buildQuery() {
   if (fmt && fop === 'f') { defaults.push(`f:${fmt}`); tests.push(c => ['legal', 'restricted'].includes(c.legalities[fmt])); }
   if ($('inId').checked && deck.commander) { defaults.push(`id<=${deck.identity || 'c'}`); tests.push(identity([...(deck.identity || 'c')])); }
   const u = user.filter(Boolean);
-  return { q: u.concat(defaults).join(' '), hasUser: u.length > 0, local: local ? c => tests.every(t => t(c)) : null };
+  return { q: u.concat(defaults).join(' '), local: local ? c => tests.every(t => t(c)) : null };
 }
 
 const sorters = {
@@ -331,7 +331,7 @@ const MAX_PAGES = 60, MAX_OTHER = 175;
 
 async function search() {
   const my = ++gen;
-  const { q, hasUser, local } = buildQuery();
+  const { q, local } = buildQuery();
   $('full').textContent = q;
   let ownedList = [], otherList = [], total = 0;
   const draw = () => {
@@ -341,7 +341,7 @@ async function search() {
     $('nOther').textContent = Math.min(otherList.length, MAX_OTHER) + (total - ownedList.length > MAX_OTHER ? ` of ${total - ownedList.length}` : '');
   };
   draw();
-  if (!hasUser) { $('status').textContent = ''; return; }
+  if (!q) { $('status').textContent = ''; return; }
   const order = bySynergy() ? 'edhrec' : $('order').value;
   const params = new URLSearchParams({ q, order, dir: $('dir').value, unique: $('prints').checked ? 'prints' : 'cards', include_extras: $('extras').checked });
   let url = 'https://api.scryfall.com/cards/search?' + params;
