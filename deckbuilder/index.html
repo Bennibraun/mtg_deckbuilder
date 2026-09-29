@@ -51,10 +51,13 @@
   .card .where { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,.75); color: var(--text); font-size: 11px; padding: 1px 6px; border-radius: 4px; }
   #querybar select { padding: 3px 6px; font-size: 12px; }
   #querybar .sort { margin-left: auto; display: flex; gap: 6px; align-items: center; color: var(--dim); font-size: 12px; }
-  #cmdbox { position: relative; width: 240px; margin: 0 auto; }
+  #cmdbox { display: flex; gap: 8px; justify-content: center; }
+  #cmdbox .cmd { position: relative; flex: 1; max-width: 240px; }
   #cmdbox img { width: 100%; border-radius: 10px; display: block; }
   #cmdbox .empty { color: var(--dim); border: 1px dashed var(--line); border-radius: 10px; padding: 24px 12px; text-align: center; }
   #cmdbox button { position: absolute; top: 8px; right: 8px; font-size: 11px; padding: 2px 8px; }
+  #findpartner { display: block; margin: 8px auto 0; font-size: 12px; padding: 3px 10px; }
+  #findpartner[hidden] { display: none; }
   .group h4 { display: flex; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 3px; }
   ul { list-style: none; padding: 0; margin: 0; }
   li { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 4px; }
@@ -197,8 +200,8 @@
 <div id="side">
   <div class="decksel"><select id="decks"></select><button id="newdeck">New</button><button id="impdeck">Import</button><button id="rendeck">Rename</button><button id="deldeck">Delete</button></div>
   <input id="quick" list="allnames" placeholder="Quick add a card (press / to focus)"><datalist id="allnames"></datalist>
-  <h3>Commander</h3>
-  <div id="cmdbox"></div>
+  <h3 id="cmdtitle">Commander</h3>
+  <div id="cmdbox"></div><button id="findpartner" hidden></button>
   <h3>Deck (<span id="count">0</span>)</h3>
   <div class="deckopts">Group <select id="dgroup"><option value="type">type</option><option value="cost">mana value</option><option value="color">color</option><option value="none">none</option></select>
   Sort <select id="dsort"><option value="cmc">mana value</option><option value="name">name</option><option value="added">added</option></select></div>
@@ -272,15 +275,17 @@ const postDeck = (name, d) => saving = saving.then(() =>
   fetch('decks.json', { method: 'POST', body: JSON.stringify({ name, deck: d }) }));
 function save(d = deck) { postDeck(d.name, d); }
 
-const emptyDeck = name => ({ name, commander: null, identity: '', theme: '', cards: [], qty: {}, maybe: [], log: [], info: {} });
+const emptyDeck = name => ({ name, commander: null, partner: null, identity: '', theme: '', cards: [], qty: {}, maybe: [], log: [], info: {} });
 function upgrade(d) {  // fields added after decks were first saved
-  d.info ??= {}; d.qty ??= {}; d.maybe ??= []; d.log ??= []; d.theme ??= '';
+  d.info ??= {}; d.qty ??= {}; d.maybe ??= []; d.log ??= []; d.theme ??= ''; d.partner ??= null;
   return d;
 }
 
 const qty = (d, name) => d.qty[name] || 1;
-const deckSize = d => d.cards.reduce((n, c) => n + qty(d, c), d.commander ? 1 : 0);
-const inDeck = (d, name) => d.commander === name || d.cards.includes(name);
+const cmdrs = d => [d.commander, d.partner].filter(Boolean);  // one or two commanders
+const isCmdr = (d, name) => cmdrs(d).includes(name);
+const deckSize = d => d.cards.reduce((n, c) => n + qty(d, c), cmdrs(d).length);
+const inDeck = (d, name) => isCmdr(d, name) || d.cards.includes(name);
 const decksWith = name => Object.values(decks).filter(d => inDeck(d, name));
 
 // Every change to the main deck goes through here so it lands in the history.
@@ -320,14 +325,75 @@ function setQty(d, name, to) {
   save(d);
 }
 
+// Second commanders: Partner, Partner with X, Partner—<group>, Friends forever,
+// Choose a Background + Background, Doctor's companion + Time Lord Doctor.
+function pairing(c) {
+  if (!c) return null;
+  const t = oracleOf(c).replace(/\([^)]*\)/g, ''), type = c.type_line || '';
+  const m = t.match(/Partner with ([^\n]+)/);
+  if (m) return { with: m[1].trim() };
+  const g = t.match(/Partner—([^\n]+)/);
+  if (g) return { group: g[1].trim() };
+  if (/(^|, )partner\s*(,|$)/im.test(t)) return { partner: true };
+  if (/Friends forever/i.test(t)) return { friends: true };
+  if (/Choose a Background/i.test(t)) return { chooser: true };
+  if (/\bBackground\b/.test(type)) return { background: true };
+  if (/Doctor's companion/i.test(t)) return { companion: true };
+  if (/Time Lord Doctor/.test(type)) return { doctor: true };
+  return null;
+}
+function canPair(a, b) {
+  const x = pairing(a), y = pairing(b);
+  if (!x || !y || a.name === b.name) return false;
+  if (x.with || y.with) return x.with === b.name || y.with === a.name;
+  if (x.group || y.group) return x.group === y.group;
+  return !!(x.partner && y.partner || x.friends && y.friends || x.chooser && y.background || x.background && y.chooser || x.companion && y.doctor || x.doctor && y.companion);
+}
+// Scryfall query for cards that can pair with `c`
+function partnerQuery(c) {
+  const x = pairing(c);
+  if (!x) return null;
+  if (x.with) return { q: `!"${x.with}"`, label: 'Find partner' };
+  if (x.group) return { q: `o:"partner—${x.group}"`, label: 'Find partner' };
+  if (x.partner) return { q: 'keyword:partner -o:"partner with" -o:"partner—"', label: 'Find partner' };
+  if (x.friends) return { q: 'keyword:"friends forever"', label: 'Find partner' };
+  if (x.chooser) return { q: 't:background', label: 'Find background' };
+  if (x.background) return { q: 'o:"choose a background"', label: 'Find commander' };
+  if (x.companion) return { q: 't:"time lord" t:doctor', label: 'Find Doctor' };
+  if (x.doctor) return { q: `keyword:"doctor's companion"`, label: 'Find companion' };
+}
+
+const WUBRG = 'wubrg';
+function refreshIdentity(d) {
+  const ids = cmdrs(d).map(n => d.info[n]?.id);
+  if (ids.every(x => x !== undefined)) d.identity = [...WUBRG].filter(x => ids.some(i => i.includes(x))).join('');
+}
+
 function setCommanderOf(d, c) {
-  change(d, { op: 'c', name: c?.name || null, from: d.commander, fromId: d.identity });
+  change(d, { op: 'c', name: c?.name || null, from: d.commander, fromPartner: d.partner, fromId: d.identity });
   if (c) {
+    if (!cardData[c.name]) keep(c);  // Scryfall result: needed to find partners
     remember(d, c);
     d.commander = c.name;
-    d.identity = c.color_identity.join('').toLowerCase();
     d.cards = d.cards.filter(n => n !== c.name);
-  } else { d.commander = null; d.identity = ''; }
+    if (d.partner && !(cardData[d.partner] && canPair(c, cardData[d.partner]))) d.partner = null;
+  } else { d.commander = d.partner; d.partner = null; }
+  if (!d.commander) d.identity = '';
+  refreshIdentity(d);
+  d.theme = '';
+  save(d);
+}
+
+function setPartnerOf(d, c) {
+  change(d, { op: 'p', name: c?.name || null, from: d.partner, fromId: d.identity });
+  if (c) {
+    if (!cardData[c.name]) keep(c);
+    remember(d, c);
+    d.partner = c.name;
+    d.cards = d.cards.filter(n => n !== c.name);
+    d.maybe = d.maybe.filter(n => n !== c.name);
+  } else d.partner = null;
+  refreshIdentity(d);
   d.theme = '';
   save(d);
 }
@@ -339,9 +405,10 @@ function undo() {
   if (e.op === '+') { deck.cards = deck.cards.filter(n => n !== e.name); delete deck.qty[e.name]; }
   if (e.op === '-') { deck.cards.push(e.name); if (e.n > 1) deck.qty[e.name] = e.n; }
   if (e.op === 'q') { if (e.from > 1) deck.qty[e.name] = e.from; else delete deck.qty[e.name]; if (!deck.cards.includes(e.name)) deck.cards.push(e.name); }
-  if (e.op === 'c') { deck.commander = e.from; deck.identity = e.fromId || ''; }
+  if (e.op === 'c') { deck.commander = e.from; deck.partner = e.fromPartner ?? deck.partner; deck.identity = e.fromId || ''; }
+  if (e.op === 'p') { deck.partner = e.from; deck.identity = e.fromId || ''; }
   save(); renderDeck();
-  if (e.op === 'c') loadEdh();
+  if (e.op === 'c' || e.op === 'p') loadEdh();
 }
 $('undo').onclick = undo;
 
@@ -454,11 +521,13 @@ $('impdlg').onclose = async () => {
     const c = cards[i];
     if (!c) return;
     remember(d, c);
-    if (r.where === 'commander' && !d.commander) { d.commander = c.name; d.identity = c.color_identity.join('').toLowerCase(); }
+    if (r.where === 'commander' && !d.commander) d.commander = c.name;
+    else if (r.where === 'commander' && !d.partner) d.partner = c.name;
     else if (r.where === 'maybe') { if (!d.maybe.includes(c.name)) d.maybe.push(c.name); }
     else if (!inDeck(d, c.name)) { d.cards.push(c.name); if (r.n > 1) d.qty[c.name] = r.n; }
     else d.qty[c.name] = qty(d, c.name) + r.n;
   });
+  refreshIdentity(d);
   change(d, { op: 'import', name: `${d.cards.length} cards` });
   save(d); openDeck(name);
   if (missing.length) alert(`Not found:\n${missing.join('\n')}`);
@@ -475,7 +544,7 @@ const large = url => url?.replace('/small/', '/large/');
 const colorsOf = c => c.colors || c.card_faces?.[0]?.colors || [];
 const oracleOf = c => c.oracle_text || (c.card_faces || []).map(f => f.oracle_text || '').join('\n');
 const anyNumber = c => /\bBasic\b/.test(c.type_line) || /deck can have any number of cards named/i.test(oracleOf(c));
-const remember = (d, c) => { d.info[c.name] = { img: small(c), type: c.type_line, cmc: c.cmc ?? 0, colors: colorsOf(c), any: anyNumber(c) }; };
+const remember = (d, c) => { d.info[c.name] = { img: small(c), type: c.type_line, cmc: c.cmc ?? 0, colors: colorsOf(c), any: anyNumber(c), id: c.color_identity.join('').toLowerCase() }; };
 const COLORS = { W: 'White', U: 'Blue', B: 'Black', R: 'Red', G: 'Green' };
 const groupers = {
   type: i => typeOf(i.type),
@@ -507,7 +576,7 @@ function preview(elem, img) {
 function shortage(name) {
   if (!isOwned(name) || deck.info[name]?.any) return null;
   const users = decksWith(name);
-  const used = users.reduce((n, d) => n + (d.commander === name ? 1 : qty(d, name)), 0);
+  const used = users.reduce((n, d) => n + (isCmdr(d, name) ? 1 : qty(d, name)), 0);
   return used > ownedCount(name) ? `You own ${ownedCount(name)}, used ${used}× in: ${users.map(d => d.name).join(', ')}` : null;
 }
 
@@ -531,11 +600,25 @@ function deckRow(name, { onName, buttons }) {
 function renderDeck() {
   $('preview').style.display = 'none';
   const box = $('cmdbox');
-  if (deck.commander) {
-    box.innerHTML = `<img src="${big(deck.info[deck.commander]?.img) || ''}" alt=""><button>Remove</button>`;
-    box.querySelector('img').alt = deck.commander;
-    box.querySelector('button').onclick = () => { setCommanderOf(deck, null); edh = {}; edhCards = []; renderDeck(); searchSoon(); };
-  } else box.innerHTML = '<div class="empty">Hover a legendary creature in the results and click "Commander", or use ★ in the deck list</div>';
+  box.innerHTML = '';
+  $('cmdtitle').textContent = deck.partner ? 'Commanders' : 'Commander';
+  for (const name of cmdrs(deck)) {
+    const c = el('div', 'cmd'), img = el('img'), b = el('button', null, 'Remove');
+    img.src = big(deck.info[name]?.img) || ''; img.alt = name;
+    b.onclick = () => { if (name === deck.partner) setPartnerOf(deck, null); else setCommanderOf(deck, null); renderDeck(); loadEdh(); };
+    c.append(img, b);
+    box.append(c);
+  }
+  if (!deck.commander) box.innerHTML = '<div class="empty">Hover a legendary creature in the results and click "Commander", or use ★ in the deck list</div>';
+  const pq = !deck.partner && partnerQuery(cardData[deck.commander]);
+  $('findpartner').hidden = !pq;
+  if (pq) {
+    $('findpartner').textContent = pq.label;
+    $('findpartner').onclick = () => {  // partners may add colors, so drop the identity filter
+      $('q').value = pq.q; $('inId').checked = false;
+      showView('search'); searchSoon();
+    };
+  }
   $('count').textContent = deckSize(deck);
   const by = $('dgroup').value, sort = $('dsort').value, groups = {};
   const info = n => ({ cmc: 0, colors: [], ...deck.info[n] });
@@ -552,6 +635,8 @@ function renderDeck() {
       const i = info(name), buttons = [];
       if (i.any) buttons.push(['−', 'One fewer', () => { setQty(deck, name, qty(deck, name) - 1); renderDeck(); }], ['+', 'One more', () => { setQty(deck, name, qty(deck, name) + 1); renderDeck(); }]);
       if (/Legendary.*Creature/.test(i.type || '')) buttons.push(['★', 'Make commander', async () => { const [c] = await lookup([name]); setCommanderOf(deck, c); renderDeck(); loadEdh(); }]);
+      if (deck.commander && !deck.partner && cardData[name] && cardData[deck.commander] && canPair(cardData[deck.commander], cardData[name]))
+        buttons.push(['☆', 'Make second commander (partner / background)', () => { setPartnerOf(deck, cardData[name]); renderDeck(); loadEdh(); }]);
       buttons.push(['↓', 'Move to maybeboard', () => { removeFrom(deck, name); deck.maybe.push(name); save(); renderDeck(); }]);
       buttons.push(['×', 'Remove', () => { removeFrom(deck, name); renderDeck(); }, 'del']);
       g.querySelector('ul').appendChild(deckRow(name, { buttons }));
@@ -598,6 +683,7 @@ function renderHistory() {
       else if (e.op === '-') line.append(el('span', 'rem', '− ' + e.name + (e.n > 1 ? ` ×${e.n}` : '')));
       else if (e.op === 'q') line.textContent = `${e.name}: ${e.from} → ${e.to}`;
       else if (e.op === 'c') line.textContent = e.name ? `Commander: ${e.name}` : `Removed commander ${e.from}`;
+      else if (e.op === 'p') line.textContent = e.name ? `Second commander: ${e.name}` : `Removed second commander ${e.from}`;
       else if (e.op === 'import') line.textContent = `Imported (${e.name})`;
       box.append(line);
     }
@@ -607,10 +693,11 @@ function renderHistory() {
 // Fill in images and types for deck cards saved before they were stored.
 async function fillDeckInfo() {
   const d = deck;
-  const names = [d.commander, ...d.cards, ...d.maybe].filter(Boolean);
+  const names = [...cmdrs(d), ...d.cards, ...d.maybe];
   await lookup(names);
-  const missing = names.filter(n => d.info[n]?.any === undefined && cardData[n]);
+  const missing = names.filter(n => d.info[n]?.id === undefined && cardData[n]);
   missing.forEach(n => remember(d, cardData[n]));
+  refreshIdentity(d);
   if (missing.length) save(d);
   if (d === deck) renderDeck();
 }
@@ -649,7 +736,7 @@ function renderStats() {
   box.innerHTML = '';
   if (cards.length < deck.cards.length) { box.textContent = 'loading...'; return; }
   const n = c => qty(deck, c.name);
-  const all = deck.commander && cardData[deck.commander] ? [cardData[deck.commander], ...cards] : cards;
+  const all = [...cmdrs(deck).map(n => cardData[n]).filter(Boolean), ...cards];
 
   // mana curve of nonland cards, with EDHREC's average deck as dashed markers
   box.append(el('h4', null, 'Mana curve (nonland)'));
@@ -712,11 +799,11 @@ function renderStats() {
   box.append(el('h4', null, `Game Changers: ${gc.length}`));
   box.append(el('div', 'dim', (gc.length === 0 ? 'Fits brackets 1–2' : gc.length <= 3 ? 'Fits bracket 3' : 'Bracket 4+') + (gc.length ? ': ' + gc.map(c => c.name).join(', ') : '')));
 
-  const value = all.reduce((s, c) => s + (Number(c.usd) || 0) * (c.name === deck.commander ? 1 : n(c)), 0);
+  const value = all.reduce((s, c) => s + (Number(c.usd) || 0) * (isCmdr(deck, c.name) ? 1 : n(c)), 0);
   const missing = all.filter(c => !isOwned(c.name)).reduce((s, c) => s + (Number(c.usd) || 0) * n(c), 0);
   box.append(el('h4', null, `Value: $${value.toFixed(0)}`), el('div', 'dim', `$${missing.toFixed(0)} of it in cards you don't own`));
 }
-$('statsbox').ontoggle = async () => { if ($('statsbox').open) { await lookup([deck.commander, ...deck.cards].filter(Boolean)); renderStats(); } };
+$('statsbox').ontoggle = async () => { if ($('statsbox').open) { await lookup([...cmdrs(deck), ...deck.cards]); renderStats(); } };
 
 // ---------- EDHREC ----------
 
@@ -727,7 +814,12 @@ function slug(name) {
 
 const pages = {};  // EDHREC page promises by path (the server caches them for a week)
 const edhPage = path => pages[path] ??= fetch('edhrec/' + path).then(r => r.ok ? r.json() : null).catch(() => null);
-const commanderPath = d => `commanders/${slug(d.commander)}${d.theme ? '/' + d.theme : ''}`;
+const pairSlug = d => cmdrs(d).map(slug).sort().join('-');
+async function deckPage(d, kind = 'commanders', theme = d.theme) {
+  const t = theme ? '/' + theme : '';
+  const p = await edhPage(`${kind}/${pairSlug(d)}${t}`);
+  return d.partner && (!p || p.missing) ? edhPage(`${kind}/${slug(d.commander)}${t}`) : p;
+}
 
 // {name: {syn, inc}} for a page, built once
 function statsOf(page) {
@@ -750,7 +842,7 @@ async function loadEdh() {
   edh = {}; edhCards = []; edhPageNow = null;
   if (!d.commander) return searchSoon();
   $('status').textContent = 'loading EDHREC...';
-  const page = await edhPage(commanderPath(d));
+  const page = await deckPage(d);
   if (d !== deck) return;
   if (!page || page.missing) $('status').textContent = 'EDHREC has no page for this commander' + (d.theme ? ' and theme' : '');
   edhPageNow = page; edh = statsOf(page);
@@ -940,6 +1032,8 @@ function cardEl(c) {
   };
   act('Maybe', () => { addMaybe(deck, c); renderDeck(); });
   if (/Legendary.*Creature|can be your commander/.test(c.type_line + oracleOf(c))) act('Commander', () => { setCommanderOf(deck, c); renderDeck(); loadEdh(); });
+  if (deck.commander && !deck.partner && cardData[deck.commander] && canPair(cardData[deck.commander], c))
+    act(pairing(c).background ? 'Background' : 'Partner', () => { setPartnerOf(deck, c); renderDeck(); loadEdh(); });
   d.appendChild(acts);
   return d;
 }
@@ -950,7 +1044,7 @@ function cardEl(c) {
 function tribesOf(d) {
   const counts = {};
   let creatures = 0;
-  for (const n of [d.commander, ...d.cards].filter(Boolean)) {
+  for (const n of [...cmdrs(d), ...d.cards]) {
     const t = d.info[n]?.type || '';
     if (/Creature/.test(t)) creatures++;
     for (const sub of new Set((t.split(' — ')[1] || '').split(/\s+|\/\//).filter(Boolean))) counts[sub] = (counts[sub] || 0) + 1;
@@ -981,14 +1075,15 @@ async function runFit(input, label) {
   const withCmd = Object.values(decks).filter(d => d.commander);
   if (!withCmd.length) return status('None of your decks has a commander yet.');
   // types for cards in decks that haven't been opened since card info was stored
-  const noInfo = withCmd.flatMap(d => [d.commander, ...d.cards].filter(n => !d.info[n]?.type).map(n => [d, n]));
+  const noInfo = withCmd.flatMap(d => [...cmdrs(d), ...d.cards].filter(n => !d.info[n]?.id).map(n => [d, n]));
   if (noInfo.length) {
     await lookup(noInfo.map(x => x[1]));
     for (const [d, n] of noInfo) if (cardData[n]) remember(d, cardData[n]);
+    withCmd.forEach(refreshIdentity);
     new Set(noInfo.map(x => x[0])).forEach(d => save(d));
   }
   status(`loading EDHREC for ${withCmd.length} decks...`);
-  const deckPages = await Promise.all(withCmd.map(d => edhPage(commanderPath(d))));
+  const deckPages = await Promise.all(withCmd.map(d => deckPage(d)));
   // EDHREC's top commanders for each card; skipped for big lists to go easy on EDHREC
   const tops = {};
   if (cards.length <= 60) {
@@ -1007,11 +1102,13 @@ async function runFit(input, label) {
     const text = lower(oracleOf(c));
     const fits = [];
     for (const { d, stats, tribes } of info) {
-      if (!c.color_identity.every(x => d.identity.includes(x.toLowerCase()))) continue;
-      const s = statFor(stats, c.name), top = tops[c.name]?.has(d.commander);
+      const pairs = !d.partner && cardData[d.commander] && canPair(cardData[d.commander], c);
+      if (!pairs && !c.color_identity.every(x => d.identity.includes(x.toLowerCase()))) continue;
+      const s = statFor(stats, c.name), top = cmdrs(d).some(n => tops[c.name]?.has(n));
       const tribe = tribes.find(t => sub.includes(t) || new RegExp(`\\b${t.toLowerCase()}s?\\b`).test(text));
-      const sc = score(s) + (top ? 0.3 : 0) + (tribe ? 0.25 : 0);
-      fits.push({ d, stats, s, top, tribe, score: sc, signal: !!(s || top || tribe), has: inDeck(d, c.name) });
+      const partner = !d.partner && cardData[d.commander] && canPair(cardData[d.commander], c);
+      const sc = score(s) + (top ? 0.3 : 0) + (tribe ? 0.25 : 0) + (partner ? 0.3 : 0);
+      fits.push({ d, stats, s, top, tribe, partner, score: sc, signal: !!(s || top || tribe || partner), has: inDeck(d, c.name) });
     }
     fits.sort((a, b) => b.score - a.score);
     return { c, fits, best: fits.find(f => f.signal && !f.has)?.score ?? -1 };
@@ -1058,11 +1155,13 @@ function fitChip(c, f, best) {
   if (s) why.push(`${s.syn >= 0 ? '+' : ''}${Math.round(s.syn * 100)}% synergy, in ${pct(s.inc)} of decks`);
   if (f.top) why.push(`a top commander for this card`);
   if (f.tribe) why.push(`${f.tribe} deck`);
+  if (f.partner) why.push(pairing(c).background ? 'can be its background' : 'can be its second commander');
   chip.append(el('div', 'why', why.join(' · ') || 'on color'));
   const acts = el('div', 'acts');
   if (f.has) { acts.append(el('span', 'tag', 'already in deck')); chip.append(acts); return chip; }
   const done = t => { acts.replaceChildren(el('span', 'tag', t)); if (d === deck) renderDeck(); };
   const btn = (label, fn) => { const b = el('button', null, label); b.onclick = fn; acts.append(b); return b; };
+  if (f.partner) btn(pairing(c).background ? 'Set background' : 'Set partner', () => { setPartnerOf(d, c); done('second commander'); if (d === deck) loadEdh(); });
   btn('Add', () => { addTo(d, c); done('added'); });
   const cuts = cutFor(d, f.stats, c);
   if (cuts.length) {
@@ -1116,7 +1215,7 @@ async function renderTune() {
   $('tunetitle').textContent = d.name;
   if (!d.commander) { $('tunestatus').textContent = 'Set a commander to get suggestions.'; $('cuts').innerHTML = $('upgrades').innerHTML = $('avg').innerHTML = ''; return; }
   $('tunestatus').textContent = '';
-  const base = await edhPage(`commanders/${slug(d.commander)}`);
+  const base = await deckPage(d, 'commanders', '');
   if (d !== deck) return;
   $('theme').replaceChildren(new Option('all decks', ''), ...(base?.themes || []).map(t => new Option(`${t.value} (${t.count})`, t.slug)));
   $('theme').value = d.theme;
@@ -1133,12 +1232,12 @@ async function renderTune() {
   $('upgrades').replaceChildren(...ups.map(c => cardEl(c)));
   if (!ups.length) $('upgrades').append(el('div', 'dim', edhCards.length ? 'Every EDHREC card you own is already in the deck.' : 'No EDHREC data for this commander.'));
 
-  const avgPage = await edhPage(`average-decks/${slug(d.commander)}${d.theme ? '/' + d.theme : ''}`);
+  const avgPage = await deckPage(d, 'average-decks');
   if (d !== deck) return;
   const box = $('avg');
   box.innerHTML = '';
   if (!avgPage?.deck?.length) { box.append(el('div', 'dim', 'EDHREC has no average deck here.')); return; }
-  const avgNames = avgPage.deck.map(x => x[0]).filter(n => n !== d.commander && !/^(Plains|Island|Swamp|Mountain|Forest|Wastes)$/.test(n));
+  const avgNames = avgPage.deck.map(x => x[0]).filter(n => !isCmdr(d, n) && !/^(Plains|Island|Swamp|Mountain|Forest|Wastes)$/.test(n));
   const missing = avgNames.filter(n => !inDeck(d, n) && !inDeck(d, front(n)));
   const extra = d.cards.filter(n => !d.info[n]?.any && !avgNames.includes(n) && !avgNames.some(a => front(a) === n));
   const missingCards = (await lookup(missing)).filter(Boolean);
@@ -1156,10 +1255,10 @@ $('theme').onchange = () => { deck.theme = $('theme').value; save(); loadEdh(); 
 
 function shoppingNeeds() {
   const need = {};
-  for (const d of Object.values(decks)) for (const n of [d.commander, ...d.cards].filter(Boolean)) {
+  for (const d of Object.values(decks)) for (const n of [...cmdrs(d), ...d.cards]) {
     if (d.info[n]?.any) continue;
     const e = need[n] ??= { name: n, decks: [], used: 0 };
-    e.decks.push(d.name); e.used += d.commander === n ? 1 : qty(d, n);
+    e.decks.push(d.name); e.used += isCmdr(d, n) ? 1 : qty(d, n);
   }
   return Object.values(need);
 }
@@ -1254,7 +1353,7 @@ $('form').oninput = $('querybar').oninput = searchSoon;
 $('dgroup').onchange = $('dsort').onchange = () => { localStorage.setItem('deckView', $('dgroup').value + ' ' + $('dsort').value); renderDeck(); };
 [$('dgroup').value, $('dsort').value] = (localStorage.getItem('deckView') || 'type cmc').split(' ');
 $('export').onclick = () => {
-  const lines = (deck.commander ? [`1 ${deck.commander}`] : []).concat([...deck.cards].sort().map(n => `${qty(deck, n)} ${n}`));
+  const lines = cmdrs(deck).map(n => `1 ${n}`).concat([...deck.cards].sort().map(n => `${qty(deck, n)} ${n}`));
   navigator.clipboard.writeText(lines.join('\n'));
 };
 
