@@ -1,0 +1,11 @@
+services:
+  deckbuilder:
+    image: python:3-slim
+    container_name: deckbuilder
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - .:/app
+    ports:
+      - "127.0.0.1:8000:8000"
+    command: python server.py 8000
