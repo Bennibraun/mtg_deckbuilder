@@ -112,11 +112,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send(200, body)
 
     def do_POST(self):
-        """Replace Cards.txt with the uploaded collection."""
-        if self.path != "/Cards.txt":
-            return self.send(404, b"{}")
-        (HERE / "Cards.txt").write_bytes(self.rfile.read(int(self.headers["Content-Length"])))
-        self.send(200, b"{}")
+        body = self.rfile.read(int(self.headers["Content-Length"]))
+        if self.path == "/Cards.txt":  # replace the collection
+            (HERE / "Cards.txt").write_bytes(body)
+            return self.send(200, b"{}")
+        if self.path == "/cards.json":  # database entries for a JSON list of names
+            load_db()
+            names = set(json.loads(body))
+            found = [c for c in db if c["name"] in names or c["name"].split(" // ")[0] in names]
+            return self.send(200, json.dumps(found).encode())
+        self.send(404, b"{}")
 
     def send(self, code, body):
         self.send_response(code)
