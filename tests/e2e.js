@@ -38,6 +38,11 @@ const today = new Date().toISOString().slice(0, 10);
     // tokens share names with real cards; lookups must return the real one
     const elves = await p.evaluate(() => fetch('cards.json', { method: 'POST', body: '["Llanowar Elves"]' }).then(r => r.json()));
     assert.deepEqual(elves.map(c => c.type_line), ['Creature — Elf Druid']);
+    // Cards.txt lines without a count still count as owned
+    const owned = await p.evaluate(() => fetch('owned.json').then(r => r.json()));
+    assert.ok(owned.some(c => c.name === 'Command Tower' && c.owned === 1), 'count-less line');
+    const cmdrList = await p.evaluate(() => fetch('commanders.json').then(r => r.json()));
+    assert.ok(cmdrList.includes('Infinite Guideline Station'), 'is:commander list');
   });
 
   await step('import a deck', async () => {
@@ -52,6 +57,9 @@ const today = new Date().toISOString().slice(0, 10);
     await p.click('#statsbox summary');
     await until(async () => /Ramp\s*[1-9]/.test(await text('#stats')), 'ramp count');
     assert.match(await text('#stats'), /Lands\s*13 \/ 37/);
+    await p.selectOption('#dgroup', 'strategy');
+    await until(async () => /Ramp\d/.test(await text('#deck')), 'strategy groups');
+    await p.selectOption('#dgroup', 'type');
     await until(async () => /two-card combos \d/.test(await text('#stats')), 'combo count');
   });
 

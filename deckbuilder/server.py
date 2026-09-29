@@ -18,8 +18,8 @@ import urllib.request
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 HERE = pathlib.Path(__file__).parent
-DB = HERE / "cards-db-v3.json"  # bump the name when slim() gains fields to force a fresh download
-OLD_DBS = ["cards-db.json", "cards-db-v2.json"]
+DB = HERE / "cards-db-v4.json"  # bump the name when slim() gains fields to force a fresh download
+OLD_DBS = ["cards-db.json", "cards-db-v2.json", "cards-db-v3.json"]
 DECKS = HERE / "decks.json"
 COLLECTION = HERE / "Cards.txt"
 ADDITIONS = HERE / "additions.json"
@@ -29,8 +29,16 @@ EDHREC_PATH = re.compile(r"/edhrec/((?:commanders|cards|average-decks)/[a-z0-9-]
 decks_lock, state_lock = threading.Lock(), threading.Lock()
 MAX_AGE = 7 * 86400
 HEADERS = {"User-Agent": "deckbuilder/1.0", "Accept": "application/json"}
-# deck roles from Scryfall Tagger oracle tags (otag:), curated by hand unlike rules-text guesses
+# Scryfall Tagger oracle tags (curated by hand, child tags included), from their bulk file:
+# roles drive the deck template, playtest odds and cut suggestions; strategies group the deck list.
 ROLE_TAGS = {"ramp": "ramp", "draw": "draw", "removal": "spot-removal", "wipe": "sweeper", "tutor": "tutor"}
+STRATEGIES = {
+    "Ramp": "ramp", "Card draw": "draw", "Removal": "removal", "Board wipe": "sweeper",
+    "Counterspell": "counterspell", "Tutor": "tutor", "Recursion": "recursion", "Protection": "protection",
+    "Lifegain": "lifegain", "Lifegain payoff": "lifegain-matters", "Tokens": "repeatable-token-generator",
+    "Sacrifice outlet": "sacrifice-outlet", "Burn": "burn", "Mill": "mill", "Discard": "discard",
+    "Flicker": "flicker", "Anthem": "anthem", "Copy": "copy", "Landfall": "landfall", "Extra turn": "extra-turn",
+}
 db, db_mtime, db_lock = [], 0, threading.Lock()
 
 
@@ -60,7 +68,34 @@ def hidden(c):
     return c["set_type"] in ("memorabilia", "token", "alchemy") or "playtest" in c.get("promo_types", [])
 
 
-def slim(c, commanders, roles):
+def oracle_tags(*mappings):
+    """For each {label: tag slug} mapping, {oracle_id: [labels]} from Scryfall's Oracle Tags bulk file."""
+    meta = json.load(get("https://api.scryfall.com/bulk-data/oracle-tags"))
+    with get(meta["jsonl_download_uri"]) as r, gzip.open(r, "rt", encoding="utf-8") as lines:
+        tags = {t["id"]: t for t in map(json.loads, lines)}
+    by_slug = {t["slug"]: t for t in tags.values()}
+
+    def oracle_ids(t, seen):
+        if t["id"] in seen:
+            return set()
+        seen.add(t["id"])
+        ids = {x["oracle_id"] for x in t["taggings"]}
+        for child in t["child_ids"]:
+            if child in tags:
+                ids |= oracle_ids(tags[child], seen)
+        return ids
+
+    out = []
+    for mapping in mappings:
+        index = {}
+        for label, slug in mapping.items():
+            for oid in oracle_ids(by_slug[slug], set()) if slug in by_slug else ():
+                index.setdefault(oid, []).append(label)
+        out.append(index)
+    return out
+
+
+def slim(c, commanders, roles, strategies):
     faces = c.get("card_faces") or [c]
     f = lambda k: c.get(k) or faces[0].get(k)
     stat = lambda k: [x[k] for x in [c, *faces] if x.get(k) is not None]
@@ -76,7 +111,8 @@ def slim(c, commanders, roles):
         "power": stat("power"), "toughness": stat("toughness"), "loyalty": stat("loyalty"),
         "commander": c["name"] in commanders,
         "game_changer": c.get("game_changer", False),
-        "roles": [r for r, names in roles.items() if c["name"] in names],
+        "roles": roles.get(c.get("oracle_id") or faces[0].get("oracle_id"), []),
+        "tags": strategies.get(c.get("oracle_id") or faces[0].get("oracle_id"), []),
         "hidden": hidden(c),
         "legalities": c["legalities"],
         "edhrec_rank": c.get("edhrec_rank"),
@@ -88,16 +124,10 @@ def slim(c, commanders, roles):
 def download_db():
     print("downloading Scryfall oracle bulk data...", flush=True)
     commanders = search_names("is:commander")
-    roles = {}
-    for role, tag in ROLE_TAGS.items():
-        try:
-            roles[role] = search_names(f"otag:{tag} f:commander")
-        except Exception as e:
-            print(f"otag:{tag} failed: {e}", flush=True)
-            roles[role] = set()
+    roles, strategies = oracle_tags(ROLE_TAGS, STRATEGIES)
     meta = json.load(get("https://api.scryfall.com/bulk-data/oracle-cards"))
     with get(meta["jsonl_download_uri"]) as r, gzip.open(r, "rt", encoding="utf-8") as lines:
-        cards = [slim(c, commanders, roles) for c in map(json.loads, lines) if c["layout"] != "art_series"]
+        cards = [slim(c, commanders, roles, strategies) for c in map(json.loads, lines) if c["layout"] != "art_series"]
     write_atomic(DB, json.dumps(cards))
     for old in OLD_DBS:  # previous formats
         (HERE / old).unlink(missing_ok=True)
@@ -133,13 +163,13 @@ def find_cards(names):
 
 
 def parse_collection(text):
-    """{lowercase name: [name, copies]} from a "count name (SET) number" list."""
+    """{lowercase name: [name, copies]} from lines like "Sol Ring", "1 Sol Ring" or "1 Sol Ring (C21) 263"."""
     counts = {}
     for line in text.splitlines():
-        m = re.match(r"^\s*(\d+)\s+(.+?)\s+\([^)]+\)", line) or re.match(r"^\s*(\d+)\s+(.+?)\s*$", line)
-        if m:
+        m = re.match(r"^\s*(?:(\d+)x?\s+)?(.+?)(?:\s+\([^)]+\).*)?\s*$", line)
+        if m and m.group(2).strip():
             name = m.group(2).strip()
-            counts.setdefault(name.lower(), [name, 0])[1] += int(m.group(1))
+            counts.setdefault(name.lower(), [name, 0])[1] += int(m.group(1) or 1)
     return counts
 
 
@@ -258,6 +288,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self.send(200, ADDITIONS.read_bytes() if ADDITIONS.exists() else b"{}")
         if self.path == "/state.json":
             return self.send(200, STATE.read_bytes() if STATE.exists() else b"{}")
+        if self.path == "/commanders.json":  # names Scryfall's is:commander matches
+            load_db()
+            return self.send(200, json.dumps([c["name"] for c in db if c["commander"]]).encode())
         m = EDHREC_PATH.fullmatch(self.path)
         if not m:
             return super().do_GET()

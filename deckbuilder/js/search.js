@@ -176,7 +176,7 @@ function cardEl(c) {
   };
   act('Maybe', () => { addMaybe(deck, c); renderDeck(); });
   act('Fit?', () => fitOne(c));
-  if (/Legendary.*Creature|can be your commander/.test(c.type_line + oracleOf(c))) act('Commander', () => { setCommanderOf(deck, c); renderDeck(); loadEdh(); });
+  if (commanders.has(c.name)) act('Commander', () => { setCommanderOf(deck, c); renderDeck(); loadEdh(); });
   if (deck.commander && !deck.partner && cardData[deck.commander] && canPair(cardData[deck.commander], c))
     act(pairing(c).background ? 'Background' : 'Partner', () => { setPartnerOf(deck, c); renderDeck(); loadEdh(); });
   d.appendChild(acts);

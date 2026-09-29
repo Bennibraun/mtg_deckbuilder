@@ -5,6 +5,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const pct = x => Math.round(x * 100) + '%';
 
+let commanders = new Set();  // names Scryfall's is:commander matches, e.g. Infinite Guideline Station
+fetch('commanders.json').then(r => r.json()).then(names => { commanders = new Set(names); redraw(); if (deck) renderDeck(); });
 let ownedCards = [], ownedN = new Map();  // owned copies by lowercase name (full and front face)
 // Decks live on the server in decks.json; every change is saved right away.
 let decks = {}, deck = null;

@@ -9,15 +9,17 @@ const colorsOf = c => c.colors || c.card_faces?.[0]?.colors || [];
 const oracleOf = c => c.oracle_text || (c.card_faces || []).map(f => f.oracle_text || '').join('\n');
 const anyNumber = c => /\bBasic\b/.test(c.type_line) || /deck can have any number of cards named/i.test(oracleOf(c));
 const remember = (d, c) => {
-  if (cardData[c.name]?.roles) c = cardData[c.name];  // prefer the database entry, which has roles
-  d.info[c.name] = { img: small(c), type: c.type_line, cmc: c.cmc ?? 0, colors: colorsOf(c), any: anyNumber(c), id: c.color_identity.join('').toLowerCase(), roles: c.roles };
+  if (cardData[c.name]?.roles) c = cardData[c.name];  // prefer the database entry, which has roles and strategy tags
+  d.info[c.name] = { img: small(c), type: c.type_line, cmc: c.cmc ?? 0, colors: colorsOf(c), any: anyNumber(c), id: c.color_identity.join('').toLowerCase(), roles: c.roles, tags: c.tags };
 };
 const COLORS = { W: 'White', U: 'Blue', B: 'Black', R: 'Red', G: 'Green' };
+// Each grouper returns the groups a card belongs to; a card can have several strategies.
 const groupers = {
-  type: i => typeOf(i.type),
-  cost: i => i.cmc >= 7 ? '7+' : String(i.cmc),
-  color: i => i.colors.length > 1 ? 'Multicolor' : COLORS[i.colors[0]] || 'Colorless',
-  none: () => 'Cards',
+  type: i => [typeOf(i.type)],
+  cost: i => [i.cmc >= 7 ? '7+' : String(i.cmc)],
+  color: i => [i.colors.length > 1 ? 'Multicolor' : COLORS[i.colors[0]] || 'Colorless'],
+  strategy: i => i.tags?.length ? i.tags : ['No strategy tag'],
+  none: () => ['Cards'],
 };
 const groupOrder = {
   type: [...TYPES, 'Other'],
@@ -25,18 +27,25 @@ const groupOrder = {
   color: [...Object.values(COLORS), 'Multicolor', 'Colorless'],
   none: ['Cards'],
 };
+// strategies are ordered by how many cards they have
+const orderGroups = (by, groups) => by !== 'strategy' ? groupOrder[by] : Object.keys(groups)
+  .sort((a, b) => (a === 'No strategy tag') - (b === 'No strategy tag') || groups[b].length - groups[a].length);
+
+$('preview').onload = e => { if (e.target.src === e.target.dataset.want) e.target.style.display = 'block'; };
 
 function preview(elem, img) {
   const p = $('preview');
   elem.onmouseenter = () => {
     if (!img) return;
-    const r = elem.getBoundingClientRect();
-    p.src = large(img);
+    const r = elem.getBoundingClientRect(), src = large(img);
     p.style.top = Math.max(8, Math.min(r.top - 60, innerHeight - 480)) + 'px';
     p.style.left = (r.left > 360 ? r.left - 348 : r.right + 12) + 'px';
-    p.style.display = 'block';
+    // stay hidden until the new image has loaded, so the previous card never flashes
+    p.dataset.want = src;
+    if (p.src === src && p.complete) p.style.display = 'block';
+    else { p.style.display = 'none'; p.src = src; }
   };
-  elem.onmouseleave = () => { p.style.display = 'none'; };
+  elem.onmouseleave = () => { p.dataset.want = ''; p.style.display = 'none'; };
 }
 
 // Copies of a card used across all decks, when that's more than you own.
@@ -91,9 +100,9 @@ function renderDeck() {
   const info = n => ({ cmc: 0, colors: [], ...deck.info[n] });
   const names = [...deck.cards];
   if (sort !== 'added') names.sort((a, b) => sort === 'cmc' && info(a).cmc - info(b).cmc || a.localeCompare(b));
-  for (const n of names) (groups[groupers[by](info(n))] ??= []).push(n);
+  for (const n of names) for (const g of groupers[by](info(n))) (groups[g] ??= []).push(n);
   $('deck').innerHTML = '';
-  for (const t of groupOrder[by]) {
+  for (const t of orderGroups(by, groups)) {
     if (!groups[t]) continue;
     const g = el('div', 'group');
     const label = by === 'type' ? LABELS[t] || t + 's' : by === 'cost' ? `Mana value ${t}` : t;
@@ -101,7 +110,7 @@ function renderDeck() {
     for (const name of groups[t]) {
       const i = info(name), buttons = [];
       if (i.any) buttons.push(['−', 'One fewer', () => { setQty(deck, name, qty(deck, name) - 1); renderDeck(); }], ['+', 'One more', () => { setQty(deck, name, qty(deck, name) + 1); renderDeck(); }]);
-      if (/Legendary.*Creature/.test(i.type || '')) buttons.push(['★', 'Make commander', async () => { const [c] = await lookup([name]); setCommanderOf(deck, c); renderDeck(); loadEdh(); }]);
+      if (commanders.has(name)) buttons.push(['★', 'Make commander', async () => { const [c] = await lookup([name]); setCommanderOf(deck, c); renderDeck(); loadEdh(); }]);
       if (deck.commander && !deck.partner && cardData[name] && cardData[deck.commander] && canPair(cardData[deck.commander], cardData[name]))
         buttons.push(['☆', 'Make second commander (partner / background)', () => { setPartnerOf(deck, cardData[name]); renderDeck(); loadEdh(); }]);
       buttons.push(['?', 'Which decks does this fit?', async () => { const [c] = await lookup([name]); if (c) fitOne(c); }]);
@@ -164,7 +173,7 @@ async function fillDeckInfo() {
   const d = deck;
   const names = [...cmdrs(d), ...d.cards, ...d.maybe];
   await lookup(names);
-  const missing = names.filter(n => d.info[n]?.roles === undefined && cardData[n]?.roles);
+  const missing = names.filter(n => d.info[n]?.tags === undefined && cardData[n]?.tags);
   missing.forEach(n => remember(d, cardData[n]));
   refreshIdentity(d);
   if (missing.length) save(d);

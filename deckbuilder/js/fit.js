@@ -35,11 +35,11 @@ async function scoreCards(cards, status = () => {}, { tops: withTops = true } = 
   const withCmd = Object.values(decks).filter(d => d.commander);
   if (!withCmd.length) return null;
   // card info for decks that haven't been opened since it was stored
-  const noInfo = withCmd.flatMap(d => [...cmdrs(d), ...d.cards].filter(n => !d.info[n]?.roles).map(n => [d, n]));
+  const noInfo = withCmd.flatMap(d => [...cmdrs(d), ...d.cards].filter(n => !d.info[n]?.tags).map(n => [d, n]));
   if (noInfo.length) {
     await lookup(noInfo.map(x => x[1]));
     const changed = new Set();
-    for (const [d, n] of noInfo) if (cardData[n]?.roles) { remember(d, cardData[n]); changed.add(d); }
+    for (const [d, n] of noInfo) if (cardData[n]?.tags) { remember(d, cardData[n]); changed.add(d); }
     for (const d of changed) { refreshIdentity(d); save(d); }
   }
   status(`loading EDHREC and combos for ${withCmd.length} decks...`);
