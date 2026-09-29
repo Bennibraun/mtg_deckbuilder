@@ -103,6 +103,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self.send(200, json.dumps(owned_cards()).encode())
         if self.path == "/decks.json":
             return self.send(200, DECKS.read_bytes() if DECKS.exists() else b"{}")
+        if self.path == "/commanders.json":  # names Scryfall's is:commander matches
+            load_db()
+            return self.send(200, json.dumps([c["name"] for c in db if c["commander"]]).encode())
         m = re.fullmatch(r"/edhrec/([a-z0-9-]+)", self.path)
         if not m:
             return super().do_GET()
