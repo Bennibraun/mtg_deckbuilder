@@ -206,6 +206,7 @@ function renderDeck() {
     }
     $('deck').appendChild(g);
   }
+  redraw();
 }
 
 // Fill in images and types for deck cards saved before they were stored.
@@ -326,7 +327,7 @@ function sortCards(list, localSort) {
   return list;
 }
 
-let gen = 0;
+let gen = 0, redraw = () => {};  // redraw re-renders the latest results, e.g. after the deck changes
 const MAX_PAGES = 60, MAX_OTHER = 175;
 
 async function search() {
@@ -334,11 +335,14 @@ async function search() {
   const { q, local } = buildQuery();
   $('full').textContent = q;
   let ownedList = [], otherList = [], total = 0;
-  const draw = () => {
-    $('owned').replaceChildren(...sortCards(ownedList, local).map(cardEl));
-    $('other').replaceChildren(...sortCards(otherList, false).slice(0, MAX_OTHER).map(cardEl));
-    $('nOwned').textContent = ownedList.length;
-    $('nOther').textContent = Math.min(otherList.length, MAX_OTHER) + (total - ownedList.length > MAX_OTHER ? ` of ${total - ownedList.length}` : '');
+  const draw = redraw = () => {
+    const notInDeck = c => c.name !== deck.commander && !deck.cards.includes(c.name);
+    const owned = sortCards(ownedList, local).filter(notInDeck);
+    const other = sortCards(otherList, false).filter(notInDeck).slice(0, MAX_OTHER);
+    $('owned').replaceChildren(...owned.map(cardEl));
+    $('other').replaceChildren(...other.map(cardEl));
+    $('nOwned').textContent = owned.length;
+    $('nOther').textContent = other.length + (total - ownedList.length > MAX_OTHER ? ` of ${total - ownedList.length}` : '');
   };
   draw();
   if (!q) { $('status').textContent = ''; return; }
