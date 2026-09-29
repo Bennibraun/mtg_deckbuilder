@@ -150,6 +150,7 @@ function renderDeckList() {
 }
 
 function openDeck(name) {
+  deckFilter = null;
   deck = upgrade(decks[name]);
   localStorage.setItem('deckName', name);
   edh = {}; edhCards = []; edhPageNow = null;

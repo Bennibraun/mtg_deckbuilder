@@ -61,8 +61,13 @@ const today = new Date().toISOString().slice(0, 10);
     await until(async () => /Ramp\d/.test(await text('#deck')), 'strategy groups');
     await p.selectOption('#dgroup', 'type');
     await until(async () => /Top strategies[\s\S]*Lifegain/.test(await text('#stats')), 'lifegain among top strategies');
-    await p.click('#stats .theme a:text-is("Lifegain")');
+    await p.click('#stats .theme a:text-is("Lifegain")');  // filters the deck list
+    await until(async () => /Lifegain: 3 cards/.test(await text('#deckfilter')), 'deck filter');
+    assert.deepEqual((await p.$$eval('#deck li .n', ns => ns.map(n => n.textContent))).sort(), ['Daxos, Blessed by the Sun', 'Heliod, Sun-Crowned', 'Soul Warden']);
+    await p.click('#deckfilter button:text-is("Find more")');
     await until(async () => /otag:lifegain/.test(await text('#full')), 'strategy search');
+    await p.click('#deckfilter button:text-is("Show all")');
+    await until(async () => (await p.$$('#deck li')).length > 10, 'filter cleared');
     await p.click('#tabs button[data-view=search]');
     await until(async () => /two-card combos \d/.test(await text('#stats')), 'combo count');
   });

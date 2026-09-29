@@ -48,6 +48,31 @@ function preview(elem, img) {
   elem.onmouseleave = () => { p.dataset.want = ''; p.style.display = 'none'; };
 }
 
+// Deck list filter set from the stats panel: {label, test(card), query} (query: Scryfall search for more)
+let deckFilter = null;
+function showOnly(label, test, query) {
+  deckFilter = deckFilter?.label === label ? null : { label, test, query };
+  renderDeck();
+  if (deckFilter) $('deckfilter').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function renderFilter(shown, cmds) {
+  const box = $('deckfilter');
+  box.innerHTML = '';
+  if (!deckFilter) return;
+  const bar = el('div', 'filterbar');
+  bar.append(el('span', null, `${deckFilter.label}: ${shown} card${shown === 1 ? '' : 's'}` + (cmds.length ? ` + ${cmds.join(' and ')}` : '')));
+  if (deckFilter.query) {
+    const more = el('button', null, 'Find more');
+    more.onclick = () => findStrategy(deckFilter.query);
+    bar.append(more);
+  }
+  const all = el('button', null, 'Show all');
+  all.onclick = () => { deckFilter = null; renderDeck(); };
+  bar.append(all);
+  box.append(bar);
+}
+
 // Copies of a card used across all decks, when that's more than you own.
 function shortage(name) {
   if (!isOwned(name) || deck.info[name]?.any) return null;
@@ -98,7 +123,8 @@ function renderDeck() {
   $('count').textContent = deckSize(deck);
   const by = $('dgroup').value, sort = $('dsort').value, groups = {};
   const info = n => ({ cmc: 0, colors: [], ...deck.info[n] });
-  const names = [...deck.cards];
+  const names = deck.cards.filter(n => !deckFilter || (cardData[n] && deckFilter.test(cardData[n])));
+  renderFilter(names.reduce((t, n) => t + qty(deck, n), 0), deckFilter ? cmdrs(deck).filter(n => cardData[n] && deckFilter.test(cardData[n])) : []);
   if (sort !== 'added') names.sort((a, b) => sort === 'cmc' && info(a).cmc - info(b).cmc || a.localeCompare(b));
   for (const n of names) for (const g of groupers[by](info(n))) (groups[g] ??= []).push(n);
   $('deck').innerHTML = '';
@@ -249,23 +275,30 @@ function renderStats() {
   // counts against a common template (37 lands, 10 ramp, 10 draw, 8 removal, 3 wipes)
   box.append(el('h4', null, 'Deck template'));
   const lands = cards.filter(isLand).reduce((s, c) => s + n(c), 0);
-  const meter = (label, have, want, names) => {
+  // a stats label that filters the deck list to the cards it counts
+  const filterLink = (label, test, query) => {
+    const a = el('a', 'filter' + (deckFilter?.label === label ? ' on' : ''), label);
+    a.href = '#';
+    a.title = 'Show these cards in the deck list';
+    a.onclick = e => { e.preventDefault(); showOnly(label, test, query); };
+    return a;
+  };
+  const meter = (label, have, want, test) => {
     const m = el('div', 'meter' + (have < want ? ' low' : ''));
-    m.title = names ? names.join('\n') : '';
     const track = el('span', 'track'), fill = el('i');
     fill.style.width = (want ? Math.min(100, have / want * 100) : have ? 100 : 0) + '%';
     track.append(fill);
-    m.append(el('span', null, label), track, el('span', null, want ? `${have} / ${want}` : have));
+    m.append(filterLink(label, test), track, el('span', null, want ? `${have} / ${want}` : have));
     box.append(m);
   };
-  meter('Lands', lands, 37);
+  meter('Lands', lands, 37, isLand);
   for (const [label, role, want] of ROLES) {
     const hits = cards.filter(c => hasRole(c, role));
-    meter(label, hits.reduce((s, c) => s + n(c), 0), want, hits.map(c => c.name));
+    meter(label, hits.reduce((s, c) => s + n(c), 0), want, c => hasRole(c, role));
   }
 
   // Themes the deck leans into, ranked by how many more cards it has for each than a typical
-  // Commander deck with this many nonland cards would. Click one to search for more.
+  // Commander deck with this many nonland cards would. Click one to see its cards, + to search for more.
   const nonland = all.filter(c => !isLand(c)), size = nonland.reduce((s, c) => s + n(c), 0);
   const themes = Object.entries(strategies).filter(([, s]) => s.kind === 'theme').map(([label, s]) => {
     const hits = nonland.filter(c => (c.tags || []).includes(label));
@@ -276,13 +309,14 @@ function renderStats() {
     box.append(el('h4', null, 'Top strategies'));
     const most = Math.max(...themes.map(t => t.count));
     for (const t of themes) {
-      const row = el('div', 'meter theme'), track = el('span', 'track'), fill = el('i'), label = el('a', null, t.label);
+      const row = el('div', 'meter theme'), track = el('span', 'track'), fill = el('i'), more = el('button', 'x', '+');
       fill.style.width = t.count / most * 100 + '%';
       track.append(fill);
-      label.href = '#';
-      label.onclick = e => { e.preventDefault(); findStrategy(t.s.query); };
-      row.title = `${t.count} cards, a typical deck has ${t.expected.toFixed(1)}. Click to find more.\n\n` + t.hits.map(c => c.name).join('\n');
-      row.append(label, track, el('span', null, `${t.count} · ${(t.count / Math.max(t.expected, 0.1)).toFixed(1)}×`));
+      more.title = `Find more ${t.label.toLowerCase()} cards`;
+      more.onclick = () => findStrategy(t.s.query);
+      const stat = el('span', null, `${t.count} · ${(t.count / Math.max(t.expected, 0.1)).toFixed(1)}×`);
+      stat.title = `${t.count} cards; a typical deck this size has ${t.expected.toFixed(1)}`;
+      row.append(filterLink(t.label, c => !isLand(c) && (c.tags || []).includes(t.label), t.s.query), track, stat, more);
       box.append(row);
     }
   }
