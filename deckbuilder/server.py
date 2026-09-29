@@ -76,8 +76,8 @@ def load_db():
 
 def owned_cards():
     load_db()
-    names = set()
-    for line in (HERE / "Cards.txt").read_text().splitlines():
+    names, collection = set(), HERE / "Cards.txt"
+    for line in (collection.read_text() if collection.exists() else "").splitlines():
         m = re.match(r"^\s*\d+\s+(.+?)\s+\([^)]+\)", line) or re.match(r"^\s*\d+\s+(.+?)\s*$", line)
         if m:
             names.add(m.group(1).lower().strip())
@@ -99,6 +99,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             return self.send(502, str(e).encode())
         self.send(200, body)
+
+    def do_POST(self):
+        """Replace Cards.txt with the uploaded collection."""
+        if self.path != "/Cards.txt":
+            return self.send(404, b"{}")
+        (HERE / "Cards.txt").write_bytes(self.rfile.read(int(self.headers["Content-Length"])))
+        self.send(200, b"{}")
 
     def send(self, code, body):
         self.send_response(code)

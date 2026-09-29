@@ -13,7 +13,8 @@
   input[type=checkbox] { accent-color: var(--accent); padding: 0; }
   input:focus, select:focus { outline: none; border-color: var(--accent); }
   button { cursor: pointer; background: var(--panel); }
-  button:hover { border-color: var(--accent); }
+  button:hover, .upload:hover { border-color: var(--accent); }
+  .upload { display: inline-block; cursor: pointer; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
   label { cursor: pointer; white-space: nowrap; }
   #bar { display: flex; gap: 8px; flex-wrap: wrap; }
   #bar #q { flex: 2; min-width: 240px; }
@@ -87,6 +88,8 @@
   <div class="buttons"><button id="export">Copy decklist</button><button id="clear">Clear deck</button></div>
   <h3>EDHREC <label style="font-weight:normal"><input type="checkbox" id="edhOwned" checked> owned only</label></h3>
   <div id="edhrec"></div>
+  <h3>Collection</h3>
+  <label class="upload">Upload Cards.txt<input type="file" id="upload" accept=".txt,text/plain" hidden></label>
 </div>
 <script>
 const $ = id => document.getElementById(id);
@@ -98,17 +101,20 @@ let edh = null;
 const isOwned = name => owned.has(norm(name)) || owned.has(norm(name.split(' // ')[0]));
 
 async function loadCollection() {
-  const txt = await (await fetch('Cards.txt')).text();
-  for (const line of txt.split('\n')) {
-    const m = line.match(/^\s*\d+\s+(.+?)\s+\([^)]+\)/) || line.match(/^\s*\d+\s+(.+?)\s*$/);
-    if (!m) continue;
-    owned.add(norm(m[1]));
-    owned.add(norm(m[1].split(' // ')[0]));
-  }
   $('status').textContent = 'loading card database...';
   ownedCards = await (await fetch('owned.json')).json();
+  owned = new Set(ownedCards.flatMap(c => [norm(c.name), norm(c.name.split(' // ')[0])]));
   $('status').textContent = `${ownedCards.length} owned cards loaded`;
 }
+
+$('upload').onchange = async () => {
+  const file = $('upload').files[0];
+  if (!file || !confirm(`Replace your collection with ${file.name}?`)) return ($('upload').value = '');
+  await fetch('Cards.txt', { method: 'POST', body: file });
+  $('upload').value = '';
+  await loadCollection();
+  renderDeck(); renderEdh(); searchSoon();
+};
 
 function save() { localStorage.setItem('deck', JSON.stringify(deck)); }
 
