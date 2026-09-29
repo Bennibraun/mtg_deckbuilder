@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "description": "End-to-end test for the deckbuilder, run with ./run.sh",
+  "devDependencies": { "playwright": "1.40.0" }
+}

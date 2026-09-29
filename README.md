@@ -3,14 +3,21 @@
 Commander deckbuilder over your own collection:
 
 - **Search**: Scryfall search with owned cards first, sortable by EDHREC synergy for the deck's commander.
-- **Fit check**: paste cards, review a whole set, or check what the last Cards.txt upload added. Every card is scored against each of your decks (color identity, EDHREC synergy and inclusion, EDHREC's top commanders for the card, creature types the deck is built around), with one-click add, swap for a suggested cut, or maybeboard.
-- **Tune deck**: cut candidates, owned upgrades, a diff against EDHREC's average deck, and EDHREC themes.
+- **Fit check**: paste cards, review a whole set, check what the last Cards.txt upload added, or press "Fit?" on any card. Every card is scored against each of your decks (color identity, EDHREC synergy and inclusion, EDHREC's top commanders for the card, creature types the deck is built around, Commander Spellbook combos it completes, partners and backgrounds), with one-click add, swap for a suggested cut (same role first: ramp for ramp, removal for removal), or maybeboard.
+- **New sets**: sets released in the last 60 days or being previewed show up as alerts with how many cards fit your decks, and again a few weeks later once EDHREC has data on them.
+- **Tune deck**: cut candidates, owned upgrades, a diff against EDHREC's average deck, EDHREC themes, and combos in the deck or one card away.
+- **Playtest**: exact opening hand and land drop odds, and sample hands with mulligans.
 - **Collection**: shopping list with prices, cards used by more decks than you own copies of, and which of your commanders your collection already covers best.
-- **Sidebar**: decklist import (Moxfield, Archidekt, MTGA, plain text), quick add (`/`), quantities for basics, maybeboard, stats (curve, lands/ramp/draw/removal/wipes, color sources, Game Changers, value) and a per-deck history with undo.
+- **Sidebar**: decklist import (Moxfield, Archidekt, MTGA, plain text), add with autocomplete (`/`, Shift+Enter for a fit check), partner / background commanders, quantities for basics, maybeboard, stats (curve, lands/ramp/draw/removal/wipes from Scryfall's role tags, color sources, Game Changers and two-card combos for brackets, value), a per-deck history with undo, and "Copy unowned" for proxies.
+- **Phones**: the deck sidebar becomes a "Deck" tab.
+
+Code: `deckbuilder/server.py` (static files, card database, EDHREC and Commander Spellbook proxies with caches), `deckbuilder/index.html` + `style.css`, and `deckbuilder/js/` (plain scripts sharing globals, loaded in order by `index.html`).
+
+Test: `tests/run.sh` serves a copy of the app with a small fixture collection and drives every feature in headless Chromium (needs Node 18+).
 
 ## Deckbuilder hosting (Docker Compose + nginx)
 
-Serves `deckbuilder/` on `127.0.0.1:8000` behind nginx. `Cards.txt`, `decks.json`, `additions.json` (cards gained in the last Cards.txt upload), `cards-db-v2.json` and the `edhrec-cache/` folder (EDHREC pages, refreshed weekly) live in the mounted folder and are gitignored, so pulls never touch them.
+Serves `deckbuilder/` on `127.0.0.1:8000` behind nginx. `Cards.txt`, `decks.json`, `additions.json` (cards gained in the last Cards.txt upload), `state.json` (shared settings such as reviewed sets), `cards-db-v3.json` and the `edhrec-cache/` folder (EDHREC pages refreshed weekly, combos daily) live in the mounted folder and are gitignored, so pulls never touch them.
 
 1. Clone and add your collection:
    ```bash

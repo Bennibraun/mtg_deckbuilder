@@ -1,7 +1,12 @@
 deckbuilder/Cards.txt
 deckbuilder/cards-db.json
 deckbuilder/cards-db-v2.json
+deckbuilder/cards-db-v3.json
+deckbuilder/state.json
 deckbuilder/decks.json
 deckbuilder/additions.json
 deckbuilder/edhrec-cache/
 deckbuilder/*.tmp
+tests/node_modules/
+tests/package-lock.json
+__pycache__/
