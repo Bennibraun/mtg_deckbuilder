@@ -7,6 +7,7 @@ import json
 import pathlib
 import re
 import sys
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -16,7 +17,7 @@ HERE = pathlib.Path(__file__).parent
 DB = HERE / "cards-db.json"
 MAX_AGE = 7 * 86400
 HEADERS = {"User-Agent": "deckbuilder/1.0", "Accept": "application/json"}
-db, db_mtime = [], 0
+db, db_mtime, db_lock = [], 0, threading.Lock()
 
 
 def get(url):
@@ -59,19 +60,29 @@ def slim(c, commanders):
     }
 
 
+def download_db():
+    print("downloading Scryfall oracle bulk data...", flush=True)
+    commanders = search_names("is:commander")
+    meta = json.load(get("https://api.scryfall.com/bulk-data/oracle-cards"))
+    with get(meta["jsonl_download_uri"]) as r, gzip.open(r, "rt", encoding="utf-8") as lines:
+        cards = [slim(c, commanders) for c in map(json.loads, lines) if c["layout"] != "art_series"]
+    tmp = DB.with_suffix(".tmp")
+    tmp.write_text(json.dumps(cards))
+    tmp.replace(DB)
+
+
 def load_db():
     global db, db_mtime
-    if not DB.exists() or time.time() - DB.stat().st_mtime > MAX_AGE:
-        print("downloading Scryfall oracle bulk data...", flush=True)
-        commanders = search_names("is:commander")
-        meta = json.load(get("https://api.scryfall.com/bulk-data/oracle-cards"))
-        with get(meta["jsonl_download_uri"]) as r, gzip.open(r, "rt", encoding="utf-8") as lines:
-            cards = [slim(c, commanders) for c in map(json.loads, lines) if c["layout"] != "art_series"]
-        tmp = DB.with_suffix(".tmp")
-        tmp.write_text(json.dumps(cards))
-        tmp.replace(DB)
-    if DB.stat().st_mtime != db_mtime:
-        db, db_mtime = json.loads(DB.read_text()), DB.stat().st_mtime
+    with db_lock:  # requests run in threads; only one should download
+        if not DB.exists() or time.time() - DB.stat().st_mtime > MAX_AGE:
+            try:
+                download_db()
+            except Exception as e:
+                if not DB.exists():
+                    raise
+                print(f"download failed, using existing copy: {e}", flush=True)
+        if DB.stat().st_mtime != db_mtime:
+            db, db_mtime = json.loads(DB.read_text()), DB.stat().st_mtime
 
 
 def owned_cards():
