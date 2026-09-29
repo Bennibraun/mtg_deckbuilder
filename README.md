@@ -7,7 +7,7 @@ Serves `deckbuilder/` on `127.0.0.1:8000` behind nginx. `Cards.txt` and `cards-d
 1. Clone and add your collection:
    ```bash
    git clone https://github.com/Bennibraun/mtg_deckbuilder.git ~/mtg_deckbuilder
-   cp /path/to/Cards.txt ~/mtg_deckbuilder/deckbuilder/
+   cp /path/to/Cards.txt ~/mtg_deckbuilder/deckbuilder/   # or use "Upload Cards.txt" on the page
    ```
 2. Start on boot:
    ```bash
