@@ -10,7 +10,7 @@ const pairSlug = d => cmdrs(d).map(slug).sort().join('-');
 async function deckPage(d, kind = 'commanders', theme = d.theme) {
   const t = theme ? '/' + theme : '';
   const p = await edhPage(`${kind}/${pairSlug(d)}${t}`);
-  return d.partner && (!p || p.missing) ? edhPage(`${kind}/${slug(d.commander)}${t}`) : p;
+  return d.partner && (!p || p.missing || !p.lists.length) ? edhPage(`${kind}/${slug(d.commander)}${t}`) : p;
 }
 
 // {name: {syn, inc}} for a page, built once

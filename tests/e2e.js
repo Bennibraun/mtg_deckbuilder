@@ -41,6 +41,9 @@ const today = new Date().toISOString().slice(0, 10);
     // Cards.txt lines without a count still count as owned
     const owned = await p.evaluate(() => fetch('owned.json').then(r => r.json()));
     assert.ok(owned.some(c => c.name === 'Command Tower' && c.owned === 1), 'count-less line');
+    // EDHREC answers a pair in non-canonical order with a redirect; the server must follow it
+    const pair = await p.evaluate(() => fetch('edhrec/commanders/agent-of-the-iron-throne-sivriss-nightmare-speaker').then(r => r.json()));
+    assert.ok(pair.lists.length > 0, 'pair page via redirect');
     const cmdrList = await p.evaluate(() => fetch('commanders.json').then(r => r.json()));
     assert.ok(cmdrList.includes('Infinite Guideline Station'), 'is:commander list');
   });

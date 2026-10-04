@@ -253,10 +253,18 @@ def edhrec(path):
     """A slimmed EDHREC page, cached on disk for a week; pages EDHREC doesn't have are cached as empty."""
     file = CACHE / (path.replace("/", "__") + ".json")
     if file.exists() and time.time() - file.stat().st_mtime < MAX_AGE:
-        return file.read_bytes()
+        cached = file.read_bytes()
+        if not cached.startswith(b'{"lists": [], "themes": [], "curve": null, "deck": []}'):  # empty: a redirect cached before they were followed
+            return cached
     try:
-        with get(f"https://json.edhrec.com/pages/{path}.json") as r:
-            body = json.dumps(slim_edhrec(json.load(r)))
+        url = path
+        for _ in range(3):  # a pair named in the other order is {"redirect": "/commanders/<canonical>"}
+            with get(f"https://json.edhrec.com/pages/{url}.json") as r:
+                page = json.load(r)
+            if "redirect" not in page:
+                break
+            url = page["redirect"].strip("/")
+        body = json.dumps(slim_edhrec(page))
     except urllib.error.HTTPError as e:
         if e.code not in (403, 404):
             raise
