@@ -161,17 +161,19 @@ let timer;
 const searchSoon = () => { clearTimeout(timer); timer = setTimeout(search, 400); };
 
 // { price: true } shows the card's price (database entries carry usd, Scryfall results prices.usd)
+const usdOf = c => Number(c.usd ?? c.prices?.usd) || 0;
 function cardEl(c, { price } = {}) {
   const d = el('div', 'card' + (isOwned(c.name) ? ' owned' : ''));
   d.innerHTML = `<img src="${big(small(c))}" loading="lazy">`;
   d.querySelector('img').title = `${c.name} (click to add)`;
-  const usd = Number(c.usd ?? c.prices?.usd);
-  if (price && !isOwned(c.name)) d.appendChild(el('span', 'price', usd ? `$${usd.toFixed(2)}` : 'no price'));
   d.onclick = () => { addTo(deck, c); renderDeck(); };
-  const s = edhStat(c);
-  if (s) {
-    const b = el('span', 'edh', `${s.syn >= 0 ? '+' : ''}${Math.round(s.syn * 100)}% syn · ${pct(s.inc)}`);
-    b.title = 'EDHREC: synergy with your commander, share of its decks running this card';
+  // bottom-left badge: EDHREC stats and, when asked for, the price (top right would cover the mana cost)
+  const s = edhStat(c), usd = usdOf(c), parts = [];
+  if (s) parts.push(`${s.syn >= 0 ? '+' : ''}${Math.round(s.syn * 100)}% syn · ${pct(s.inc)}`);
+  if (price) parts.push(usd ? `$${usd.toFixed(2)}` : 'no price');
+  if (parts.length) {
+    const b = el('span', 'edh', parts.join(' · '));
+    b.title = (s ? 'EDHREC: synergy with your commander, share of its decks running this card' : '') + (usd ? `\nPrice: $${usd.toFixed(2)}` : '');
     d.appendChild(b);
   }
   const users = decksWith(c.name).filter(x => x !== deck);

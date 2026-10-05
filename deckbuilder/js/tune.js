@@ -1,8 +1,20 @@
-// Tune tab: collapsible sections (open state remembered per browser), ranked by the "Rank by" choice.
+// Tune tab: collapsible sections (open state remembered per browser), sorted by the "Sort by" choice.
 
-const rankBy = () => $('tunerank').value;
-// higher is better; synergy is EDHREC's "how much more than other decks of these colors", inclusion how many decks of this commander run it
-const rank = s => !s ? -Infinity : rankBy() === 'syn' ? s.syn : rankBy() === 'inc' ? s.inc : score(s);
+const sortBy = () => $('tunerank').value;
+const byPrice = () => sortBy().startsWith('price');
+// EDHREC rank, higher is better: synergy is "how much more than other decks of these colors",
+// inclusion how many decks of this commander run it. Price sorts fall back to synergy where price
+// means nothing (cut candidates) and to break ties.
+const rank = s => !s ? -Infinity : sortBy() === 'inc' ? s.inc : sortBy() === 'score' ? score(s) : s.syn;
+// suggestion order: price (cards without one last), else EDHREC rank
+function suggestionOrder(a, b) {
+  const tie = rank(edhStat(b)) - rank(edhStat(a));
+  if (!byPrice()) return tie;
+  const pa = usdOf(a) || Infinity, pb = usdOf(b) || Infinity;
+  if (pa === pb) return tie;
+  if (sortBy() === 'price-desc') return pa === Infinity ? 1 : pb === Infinity ? -1 : pb - pa;
+  return pa - pb;
+}
 const setCount = (id, text) => { $(id + '-n').textContent = text; };
 
 async function renderTune() {
@@ -30,9 +42,9 @@ async function renderTune() {
   }));
   setCount('cuts', cuts.length);
 
-  const candidates = edhCards.filter(c => !inDeck(d, c.name)).sort((a, b) => rank(edhStat(b)) - rank(edhStat(a)));
+  const candidates = edhCards.filter(c => !inDeck(d, c.name)).sort(suggestionOrder);
   const ups = candidates.filter(c => isOwned(c.name));
-  $('upgrades').replaceChildren(...ups.slice(0, 40).map(c => cardEl(c)));
+  $('upgrades').replaceChildren(...ups.slice(0, 40).map(c => cardEl(c, { price: byPrice() })));
   if (!ups.length) $('upgrades').append(el('div', 'dim', edhCards.length ? 'Every EDHREC card you own is already in the deck.' : 'No EDHREC data for this commander.'));
   setCount('upgrades', ups.length > 40 ? `40 of ${ups.length}` : ups.length);
 

@@ -137,10 +137,18 @@ const today = new Date().toISOString().slice(0, 10);
     await p.click('.tunebox[data-key=buy] > summary');
     await until(async () => (await p.$$('#buy .card')).length > 0, 'upgrades to buy');
     assert.ok((await p.$$eval('#buy .card', cs => cs.filter(c => c.classList.contains('owned')).length)) === 0, 'buy list has no owned cards');
-    assert.match(await text('#buy .card .price'), /\$\d|no price/);
+    // price is the last part of the bottom-left badge
+    const prices = () => p.$$eval('#buy .card .edh', bs => bs.map(b => b.textContent.split(' · ').pop()));
+    assert.ok((await prices()).every(t => /^\$\d|^no price$/.test(t)), 'prices shown');
     await p.fill('#buymax', '1');
-    await until(async () => (await p.$$eval('#buy .price', ps => ps.map(x => x.textContent))).every(t => t === 'no price' || Number(t.slice(1)) <= 1), 'max price filter');
+    await until(async () => (await prices()).every(t => t === 'no price' || Number(t.slice(1)) <= 1), 'max price filter');
     await p.fill('#buymax', '');
+    await p.selectOption('#tunerank', 'price');
+    await until(async () => {
+      const ps = (await prices()).filter(t => t !== 'no price').map(t => Number(t.slice(1)));
+      return ps.length > 2 && ps.every((x, i) => !i || ps[i - 1] <= x);
+    }, 'sorted by price');
+    await p.selectOption('#tunerank', 'syn');
   });
 
   await step('playtest', async () => {
