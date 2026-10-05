@@ -160,10 +160,13 @@ function findStrategy(query) {
 let timer;
 const searchSoon = () => { clearTimeout(timer); timer = setTimeout(search, 400); };
 
-function cardEl(c) {
+// { price: true } shows the card's price (database entries carry usd, Scryfall results prices.usd)
+function cardEl(c, { price } = {}) {
   const d = el('div', 'card' + (isOwned(c.name) ? ' owned' : ''));
   d.innerHTML = `<img src="${big(small(c))}" loading="lazy">`;
   d.querySelector('img').title = `${c.name} (click to add)`;
+  const usd = Number(c.usd ?? c.prices?.usd);
+  if (price && !isOwned(c.name)) d.appendChild(el('span', 'price', usd ? `$${usd.toFixed(2)}` : 'no price'));
   d.onclick = () => { addTo(deck, c); renderDeck(); };
   const s = edhStat(c);
   if (s) {

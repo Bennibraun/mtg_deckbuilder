@@ -61,16 +61,20 @@
 
   <section id="v-tune" class="view">
   <div class="toolbar"><h3 style="margin:0" id="tunetitle"></h3>
-    <span class="dim" style="margin-left:auto">EDHREC theme <select id="theme"></select></span></div>
+    <span class="dim" style="margin-left:auto">Rank by <select id="tunerank"><option value="syn">synergy</option><option value="score">synergy + inclusion</option><option value="inc">inclusion</option></select>
+    EDHREC theme <select id="theme"></select></span></div>
   <div id="tunestatus" class="status"></div>
-  <h3>Cut candidates <span class="dim">lowest EDHREC synergy + inclusion; cards EDHREC doesn't list for this commander score 0</span></h3>
-  <ul id="cuts"></ul>
-  <h3>Upgrades you own <span class="dim">high-synergy cards from your collection that aren't in this deck</span></h3>
-  <div id="upgrades" class="results"></div>
-  <h3>Compared with EDHREC's average deck</h3>
-  <div id="avg"></div>
-  <h3>Combos <span class="dim">from Commander Spellbook; hover a combo for its steps</span></h3>
-  <div id="combos"></div>
+  <details class="tunebox" data-key="cuts" open><summary>Cut candidates <span class="n" id="cuts-n"></span> <span class="dim">weakest by EDHREC for this commander; cards EDHREC doesn't list come first</span></summary>
+    <ul id="cuts"></ul></details>
+  <details class="tunebox" data-key="owned" open><summary>Upgrades you own <span class="n" id="upgrades-n"></span> <span class="dim">top EDHREC cards in your collection that aren't in this deck</span></summary>
+    <div id="upgrades" class="results compact"></div></details>
+  <details class="tunebox" data-key="buy"><summary>Upgrades to buy <span class="n" id="buy-n"></span> <span class="dim">top EDHREC cards you don't own</span></summary>
+    <div class="toolbar"><span class="dim">Max price $<input id="buymax" type="number" min="0" step="1" style="width:80px"></span></div>
+    <div id="buy" class="results compact"></div></details>
+  <details class="tunebox" data-key="avg"><summary>Compared with EDHREC's average deck <span class="n" id="avg-n"></span></summary>
+    <div id="avg"></div></details>
+  <details class="tunebox" data-key="combos"><summary>Combos <span class="n" id="combos-n"></span> <span class="dim">from Commander Spellbook; hover a combo for its steps</span></summary>
+    <div id="combos"></div></details>
   </section>
 
   <section id="v-play" class="view">

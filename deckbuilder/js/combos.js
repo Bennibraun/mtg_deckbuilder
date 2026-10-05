@@ -53,7 +53,7 @@ async function renderCombos(d) {
   box.replaceChildren(el('div', 'dim', 'loading combos from Commander Spellbook...'));
   const result = await deckCombos(d);
   if (my !== comboGen) return;
-  if (!result) return box.replaceChildren(el('div', 'dim', 'Commander Spellbook lookup failed.'));
+  if (!result) { $('combos-n').textContent = ''; return box.replaceChildren(el('div', 'dim', 'Commander Spellbook lookup failed.')); }
   box.innerHTML = '';
   box.append(el('h4', null, `In the deck (${result.included.length})`));
   for (const c of result.included) box.append(comboEl(c));
@@ -63,6 +63,7 @@ async function renderCombos(d) {
   if (my !== comboGen) return;
   const rows = names.map((n, i) => ({ n, c: cards[i], combos: pieces[norm(front(n))] }))
     .sort((a, b) => isOwned(b.n) - isOwned(a.n) || b.combos.length - a.combos.length || b.combos[0].popularity - a.combos[0].popularity);
+  $('combos-n').textContent = `${result.included.length} in the deck, ${rows.length} one card away`;
   box.append(el('h4', null, `One card away (${rows.length}, owned first)`));
   for (const { n, c, combos } of rows.slice(0, 40)) {
     const row = el('div', 'away');

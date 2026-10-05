@@ -43,8 +43,16 @@ async function checkNewSets(sets = allSets) {
   const released = s => new Date(s.released_at).getTime();
   const fresh = sets.filter(s => !s.digital && SET_TYPES.includes(s.set_type) && s.card_count > 0 && Math.abs(released(s) - now) < 60 * DAY && !reviewed[s.code]);
   const recheck = sets.filter(s => reviewed[s.code] && !reviewed[s.code].rechecked && now - new Date(reviewed[s.code].date) > 21 * DAY && now - released(s) < 120 * DAY);
-  const box = $('alerts');
-  box.innerHTML = '';
+  $('alerts').innerHTML = '';
+  // more than two alerts fold into one collapsible line
+  let box = $('alerts'), summary;
+  if (fresh.length + recheck.length > 2) {
+    const group = el('details', 'alertgroup');
+    summary = el('summary', null, `${fresh.length + recheck.length} set alerts`);
+    group.append(summary);
+    $('alerts').append(group);
+    box = group;
+  }
   const alert = (text, buttons) => {
     const a = el('div', 'alert');
     a.append(el('span', null, text));
@@ -69,10 +77,14 @@ async function checkNewSets(sets = allSets) {
       ['Dismiss', () => { markReviewed(s.code, { rechecked: true }); a.remove(); }],
     ]);
   }
+  let total = 0;
   for (const [s, n] of counts) {  // one set at a time to go easy on Scryfall
     const rows = await scoreCards(await loadSet(s.code), () => {}, { tops: false });
-    if (!rows) { n.textContent = ''; continue; }  // no deck has a commander yet
+    if (!rows) { counts.forEach(([, x]) => { x.textContent = ''; }); return; }  // no deck has a commander yet
     const fits = rows.filter(r => r.fits.some(f => f.signal && !f.has)).length;
     n.textContent = ` · ${fits} card${fits === 1 ? '' : 's'} fit your decks`;
+    total += fits;
+    if (summary) summary.textContent = `${fresh.length + recheck.length} set alerts · ${total} card${total === 1 ? '' : 's'} fit your decks so far`;
   }
+  if (summary && counts.length) summary.textContent = summary.textContent.replace(' so far', '');
 }

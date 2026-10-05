@@ -134,6 +134,13 @@ const today = new Date().toISOString().slice(0, 10);
     await p.click('#tabs button[data-view=tune]');
     await until(async () => (await p.$$('#cuts li')).length > 0, 'cut candidates');
     await until(async () => /In the deck \(\d+\)[\s\S]*One card away \(\d+/.test(await text('#combos')), 'combos');
+    await p.click('.tunebox[data-key=buy] > summary');
+    await until(async () => (await p.$$('#buy .card')).length > 0, 'upgrades to buy');
+    assert.ok((await p.$$eval('#buy .card', cs => cs.filter(c => c.classList.contains('owned')).length)) === 0, 'buy list has no owned cards');
+    assert.match(await text('#buy .card .price'), /\$\d|no price/);
+    await p.fill('#buymax', '1');
+    await until(async () => (await p.$$eval('#buy .price', ps => ps.map(x => x.textContent))).every(t => t === 'no price' || Number(t.slice(1)) <= 1), 'max price filter');
+    await p.fill('#buymax', '');
   });
 
   await step('playtest', async () => {
