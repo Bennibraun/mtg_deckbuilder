@@ -8,8 +8,21 @@
 </head>
 <body>
 <div id="main">
-  <nav id="tabs"><button data-view="deck" class="phone">Deck</button><button data-view="search">Search</button><button data-view="fit">Fit check</button><button data-view="tune">Tune deck</button><button data-view="play">Playtest</button><button data-view="coll">Collection</button></nav>
+  <nav id="tabs"><button data-view="deck" class="phone">Deck</button><button data-view="dash">Decks</button><button data-view="search">Search</button><button data-view="fit">Fit check</button><button data-view="tune">Tune deck</button><button data-view="play">Playtest</button><button data-view="coll">Collection</button></nav>
   <div id="alerts"></div>
+
+  <section id="v-dash" class="view">
+  <div id="dashsum" class="dashsum"></div>
+  <div class="toolbar dashbar">
+    <span id="dashcolors" class="pipbtns"></span>
+    <select id="dashmode" title="How the selected colors match a deck's color identity"><option value="includes">includes</option><option value="exactly">exactly</option><option value="within">within</option></select>
+    <input id="dashq" placeholder="Deck, commander or folder">
+    <span class="dim">Sort <select id="dashsort"><option value="changed">last changed</option><option value="name">name</option><option value="size">size</option><option value="value">value</option><option value="missing">cards missing</option><option value="colors">colors</option></select></span>
+    <span class="dim">Group <select id="dashgroup"><option value="folder">folder</option><option value="colors">colors</option><option value="none">none</option></select></span>
+    <span style="margin-left:auto"><button id="dashnew">New deck</button> <button id="dashimport">Import</button></span>
+  </div>
+  <div id="dashdecks"></div>
+  </section>
 
   <section id="v-search" class="view">
   <div id="form">
@@ -135,6 +148,7 @@
 <script src="js/collection.js"></script>
 <script src="js/playtest.js"></script>
 <script src="js/sets.js"></script>
+<script src="js/dashboard.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

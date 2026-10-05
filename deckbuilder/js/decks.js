@@ -4,9 +4,9 @@ const postDeck = (name, d) => saving = saving.then(() =>
   fetch('decks.json', { method: 'POST', body: JSON.stringify({ name, deck: d }) }));
 function save(d = deck) { postDeck(d.name, d); }
 
-const emptyDeck = name => ({ name, commander: null, partner: null, identity: '', theme: '', cards: [], qty: {}, maybe: [], log: [], info: {} });
+const emptyDeck = name => ({ name, commander: null, partner: null, identity: '', theme: '', folder: '', cards: [], qty: {}, maybe: [], log: [], info: {} });
 function upgrade(d) {  // fields added after decks were first saved
-  d.info ??= {}; d.qty ??= {}; d.maybe ??= []; d.log ??= []; d.theme ??= ''; d.partner ??= null;
+  d.info ??= {}; d.qty ??= {}; d.maybe ??= []; d.log ??= []; d.theme ??= ''; d.partner ??= null; d.folder ??= '';
   return d;
 }
 

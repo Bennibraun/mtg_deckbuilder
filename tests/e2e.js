@@ -14,7 +14,8 @@ const today = new Date().toISOString().slice(0, 10);
   const errors = [];
   p.on('pageerror', e => errors.push(e.message));
   p.on('console', m => m.type() === 'error' && errors.push(m.text()));
-  p.on('dialog', d => d.accept(d.type() === 'prompt' ? 'Wilson' : undefined));
+  let answer = 'Wilson';  // what prompts get answered with
+  p.on('dialog', d => d.accept(d.type() === 'prompt' ? answer : undefined));
   // one "new" set so the alert shows up regardless of today's real releases
   await p.route('https://api.scryfall.com/sets', r => r.fulfill({ json: { data: [
     { code: 'lci', name: 'Test Set', released_at: today, set_type: 'expansion', digital: false, card_count: 286 },
@@ -171,6 +172,28 @@ const today = new Date().toISOString().slice(0, 10);
     await p.locator('.alert button', { hasText: 'Review' }).click();
     await until(async () => /set LCI: \d+ cards/.test(await text('#fitstatus')), 'set review', 120000);
     await until(async () => !/Test Set/.test(await text('#alerts')), 'alert cleared');
+  });
+
+  await step('decks dashboard', async () => {
+    await p.click('#tabs button[data-view=dash]');
+    const tiles = () => p.$$eval('#dashdecks .tile b', bs => bs.map(b => b.textContent));
+    const deckCount = (await p.$$('#decks option')).length;
+    await until(async () => (await tiles()).length === deckCount, 'a tile per deck');
+    assert.match(await text('#dashsum'), new RegExp(`${deckCount} decks`));
+    await p.click('.pipbtn[data-color=g]');
+    await until(async () => (await tiles()).sort().join() === ["Gishath, Sun's Avatar", 'Wilson'].join(), 'green decks');
+    await p.click('.pipbtn[data-color=w]');
+    await until(async () => (await tiles()).join() === "Gishath, Sun's Avatar", 'green and white decks');
+    await p.selectOption('#dashmode', 'exactly');
+    await until(async () => (await tiles()).length === 0, 'no exactly-GW deck');
+    await p.selectOption('#dashmode', 'includes');
+    await p.click('.pipbtn[data-color=g]'); await p.click('.pipbtn[data-color=w]');
+    answer = 'Built';
+    await p.locator('.tile', { hasText: "Gishath, Sun's Avatar" }).locator('select').selectOption('\u0000new');
+    await until(async () => /Built \(1\)/.test(await text('#dashdecks')), 'folder group');
+    await p.locator('.tile', { hasText: "Gishath, Sun's Avatar" }).locator('button', { hasText: 'Duplicate' }).click();
+    await until(async () => (await tiles()).includes("Gishath, Sun's Avatar (copy)"), 'duplicate');
+    assert.equal(await p.inputValue('#decks'), "Gishath, Sun's Avatar (copy)");
   });
 
   await step('phone layout', async () => {

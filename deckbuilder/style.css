@@ -138,6 +138,33 @@ td.num, th.num { text-align: right; }
 .results.hand .card { cursor: default; }
 .phone { display: none; }
 
+.pip { display: inline-block; width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(0,0,0,.5); vertical-align: -2px; }
+.pip-w { background: #f6f1d3; } .pip-u { background: #3f8fd8; } .pip-b { background: #2b2629; border-color: #777; }
+.pip-r { background: #e2533c; } .pip-g { background: #3c9d52; } .pip-c { background: #b9b2a8; }
+.dashsum { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 10px; }
+.dashsum .dist { display: flex; gap: 12px; color: var(--dim); }
+.pipbtns { display: flex; gap: 4px; }
+.pipbtn { padding: 4px 6px; opacity: .45; }
+.pipbtn.on { opacity: 1; border-color: var(--accent); }
+.dashbar input { min-width: 200px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; cursor: pointer; display: flex; flex-direction: column; }
+.tile:hover { border-color: var(--accent); }
+.tile.current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.tile .art { display: flex; height: 110px; background: var(--bg); }
+.tile .art img { flex: 1; min-width: 0; object-fit: cover; }
+.tile .noart { margin: auto; color: var(--dim); font-size: 12px; }
+.tile .head { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 8px 10px 2px; }
+.tile .head b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile .pips { display: flex; gap: 2px; flex: none; }
+.tile .facts { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 2px 10px; font-size: 12px; color: var(--dim); }
+.tile .facts .ok { color: var(--own); }
+.tile .facts .bad { color: var(--bad); }
+.tile .themes { padding: 2px 10px; font-size: 12px; color: var(--accent); min-height: 18px; }
+.tile .foot { display: flex; gap: 6px; align-items: center; padding: 6px 10px 8px; margin-top: auto; }
+.tile .foot .dim { margin-right: auto; }
+.tile .foot select, .tile .foot button { font-size: 11px; padding: 2px 6px; }
+
 /* Phones: one column; the deck sidebar becomes the "Deck" tab. Cards show their buttons
    without hovering, and hover previews are off. */
 @media (max-width: 820px) {

@@ -13,6 +13,7 @@ function showView(v) {
   if (v === 'coll' && deck) renderShop(false);
   if (v === 'fit' && fitRows.length) renderFit();
   if (v === 'play' && deck) renderPlay();
+  if (v === 'dash' && deck) renderDash();
 }
 for (const b of document.querySelectorAll('#tabs button')) b.onclick = () => showView(b.dataset.view);
 phone.onchange = () => { if (!phone.matches && currentView === 'deck') showView('search'); };
@@ -33,5 +34,5 @@ const sets = fetch('https://api.scryfall.com/sets').then(r => r.json()).then(r =
   for (const x of r.data) { const o = document.createElement('option'); o.value = x.code; o.label = x.name; $('sets').appendChild(o); }
   return r.data;
 });
-showView(localStorage.getItem('view') || 'search');
+showView(localStorage.getItem('view') || 'dash');
 Promise.all([loadCollection().then(loadDecks), loadState()]).then(async () => checkNewSets(await sets));

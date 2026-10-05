@@ -150,6 +150,7 @@ function renderDeck() {
   redraw();
   if (currentView === 'tune') renderTune();
   if (currentView === 'play') renderPlay();
+  if (currentView === 'dash') renderDash();
 }
 
 function renderMaybe() {
@@ -241,6 +242,18 @@ addEventListener('keydown', e => {
 
 const lower = s => (s || '').toLowerCase().replace(/\([^)]*\)/g, '');
 const isLand = c => /\bLand\b/.test(c.type_line.split(' // ')[0]);
+// Themes a deck leans into, ranked by how many more cards it has for each than a typical Commander
+// deck with as many nonland cards would. `cards`: database entries for the deck's cards and commanders.
+function topThemes(d, cards, limit = 10) {
+  const n = c => isCmdr(d, c.name) ? 1 : qty(d, c.name);
+  const nonland = cards.filter(c => !isLand(c)), size = nonland.reduce((s, c) => s + n(c), 0);
+  return Object.entries(strategies).filter(([, s]) => s.kind === 'theme').map(([label, s]) => {
+    const hits = nonland.filter(c => (c.tags || []).includes(label));
+    const count = hits.reduce((t, c) => t + n(c), 0), expected = size * s.rate;
+    return { label, s, hits, count, expected, excess: count - expected };
+  }).filter(t => t.count >= 3 && t.excess > 1).sort((a, b) => b.excess - a.excess).slice(0, limit);
+}
+
 // Roles come from Scryfall Tagger (see ROLE_TAGS in server.py); [label, role, template count]
 const ROLES = [['Ramp', 'ramp', 10], ['Card draw', 'draw', 10], ['Removal', 'removal', 8], ['Board wipes', 'wipe', 3], ['Tutors', 'tutor', 0]];
 const ROLE_NAMES = { ramp: 'ramp', draw: 'card draw', removal: 'removal', wipe: 'board wipe', tutor: 'tutor' };
@@ -299,12 +312,7 @@ function renderStats() {
 
   // Themes the deck leans into, ranked by how many more cards it has for each than a typical
   // Commander deck with this many nonland cards would. Click one to see its cards, + to search for more.
-  const nonland = all.filter(c => !isLand(c)), size = nonland.reduce((s, c) => s + n(c), 0);
-  const themes = Object.entries(strategies).filter(([, s]) => s.kind === 'theme').map(([label, s]) => {
-    const hits = nonland.filter(c => (c.tags || []).includes(label));
-    const count = hits.reduce((t, c) => t + n(c), 0), expected = size * s.rate;
-    return { label, s, hits, count, expected, excess: count - expected };
-  }).filter(t => t.count >= 3 && t.excess > 1).sort((a, b) => b.excess - a.excess).slice(0, 10);
+  const themes = topThemes(deck, all);
   if (themes.length) {
     box.append(el('h4', null, 'Top strategies'));
     const most = Math.max(...themes.map(t => t.count));
